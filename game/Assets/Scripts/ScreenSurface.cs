@@ -21,11 +21,18 @@ public struct ScreenLine
 public class ScreenSurface : MonoBehaviour
 {
     public Transform screen;
-    public float characterSize = 0.0105f;
-    public float lineHeight = 0.0152f;
+    public float characterSize = 0.00064f;
+    public float lineHeight = 0.0115f;
     public float padX = 0.012f;
     public float padY = 0.010f;
     public Font font;
+
+    /// <summary>
+    /// Кегль, с которым создаётся динамический шрифт. TextMesh масштабирует
+    /// глиф как characterSize * fontSize / 10, поэтому ширина символа считается
+    /// с тем же коэффициентом — иначе сетка колонок разъезжается.
+    /// </summary>
+    public const int FontSize = 128;
 
     public int Cols { get; private set; }
     public int Rows { get; private set; }
@@ -37,8 +44,8 @@ public class ScreenSurface : MonoBehaviour
     float width, height;
 
     public static ScreenSurface Create(Transform screenQuad, Font font,
-                                       float characterSize = 0.0105f,
-                                       float lineHeight = 0.0152f)
+                                       float characterSize = 0.00064f,
+                                       float lineHeight = 0.0115f)
     {
         var go = new GameObject("Surface_" + screenQuad.name);
         go.transform.SetPositionAndRotation(
@@ -59,7 +66,7 @@ public class ScreenSurface : MonoBehaviour
         width = Mathf.Abs(screen.lossyScale.x);
         height = Mathf.Abs(screen.lossyScale.y);
 
-        float charWidth = characterSize * 0.602f; // DejaVu Sans Mono
+        float charWidth = characterSize * (FontSize / 10f) * 0.602f; // DejaVu Sans Mono
         Cols = Mathf.Max(8, Mathf.FloorToInt((width - 2f * padX) / charWidth));
         Rows = Mathf.Max(4, Mathf.FloorToInt((height - 2f * padY) / lineHeight));
 
@@ -74,7 +81,7 @@ public class ScreenSurface : MonoBehaviour
 
             var tm = go.AddComponent<TextMesh>();
             tm.font = font;
-            tm.fontSize = 128;
+            tm.fontSize = FontSize;
             tm.characterSize = characterSize;
             tm.anchor = TextAnchor.UpperLeft;
             tm.alignment = TextAlignment.Left;

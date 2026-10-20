@@ -31,7 +31,8 @@ public class NightDirector : MonoBehaviour
     public ModalKind Modal => modal;
 
     // прицел и система действий
-    public bool ActionVisible => action != null && action.HasTarget;
+    public bool ActionVisible => action != null && action.HasTarget
+                                 && !string.IsNullOrEmpty(action.Prompt);
     public string ActionPrompt => action != null ? action.Prompt : "";
     public int ActionTyped => action != null ? action.TypedCount : 0;
     public bool ActionRejected => action != null && action.RejectedRecently;
@@ -148,17 +149,20 @@ public class NightDirector : MonoBehaviour
         Transform chat = FindScreen("Monitor_Chat");
         Transform laptop = FindLaptopScreen();
 
+        // Экраны в комнате друга — 0.32 × 0.24 м. TextMesh масштабирует глиф
+        // как characterSize * fontSize / 10, поэтому 0.00064 при fontSize 128
+        // даёт шаг ~4.93 мм и ровно 60 колонок; lineHeight 0.0115 — 19 строк.
         if (term != null)
         {
-            terminalSurface = ScreenSurface.Create(term, UiFont, 0.0105f, 0.0152f);
+            terminalSurface = ScreenSurface.Create(term, UiFont, 0.00064f, 0.0115f);
         }
         if (chat != null)
         {
-            messengerSurface = ScreenSurface.Create(chat, UiFont, 0.0105f, 0.0152f);
+            messengerSurface = ScreenSurface.Create(chat, UiFont, 0.00064f, 0.0115f);
         }
         if (laptop != null)
         {
-            laptopSurface = ScreenSurface.Create(laptop, UiFont, 0.0068f, 0.0106f);
+            laptopSurface = ScreenSurface.Create(laptop, UiFont, 0.00064f, 0.0115f);
             var ll = new List<ScreenLine>
             {
                 new ScreenLine("", Color.white),
@@ -185,15 +189,12 @@ public class NightDirector : MonoBehaviour
 
     static Transform FindLaptopScreen()
     {
+        // В комнате друга ноутбук закрыт и своего экрана не имеет.
+        // Тогда декоративную надпись не рисуем вовсе.
         GameObject lap = GameObject.Find("Laptop");
         if (lap == null) return null;
         Transform lid = lap.transform.Find("Lid");
-        if (lid != null)
-        {
-            Transform s = lid.Find("Screen");
-            if (s != null) return s;
-        }
-        return lap.transform;
+        return lid != null ? lid.Find("Screen") : null;
     }
 
     void BuildTasks()
@@ -277,7 +278,9 @@ public class NightDirector : MonoBehaviour
     void BuildWorldBits()
     {
         pillsObj = GameObject.Find("Pills");
-        dictaphoneObj = GameObject.Find("Dictaphone");
+        // в комнате друга диктофон называется Recorder
+        dictaphoneObj = GameObject.Find("Recorder");
+        if (dictaphoneObj == null) dictaphoneObj = GameObject.Find("Dictaphone");
         if (dictaphoneObj != null) dictaphoneHome = dictaphoneObj.transform.localPosition;
 
         BindPhoneInteractable();
@@ -303,6 +306,7 @@ public class NightDirector : MonoBehaviour
 
         phoneInteractable.prompt = "PICK UP";
         phoneInteractable.available = false;
+        phoneInteractable.maxDistance = 2.6f;
         phoneInteractable.Activated += OnPhoneAction;
     }
 
@@ -351,15 +355,31 @@ public class NightDirector : MonoBehaviour
 
     void BuildWallClock()
     {
+        // Часы друга — аналоговые, со стрелками. Игровое время цифровое,
+        // поэтому стрелки прячем, а на циферблат кладём цифровое время.
+        GameObject clock = GameObject.Find("WallClock");
+        Vector3 pos = new Vector3(1.35f, 1.9f, -1.95f);
+        Quaternion rot = Quaternion.Euler(0f, 180f, 0f);
+
+        if (clock != null)
+        {
+            Transform face = clock.transform.Find("Face");
+            Vector3 facePos = face != null ? face.position : clock.transform.position;
+            pos = facePos + clock.transform.forward * 0.013f;
+            rot = clock.transform.rotation * Quaternion.Euler(0f, 180f, 0f);
+            HideClockPart(clock.transform, "Hand_Hour");
+            HideClockPart(clock.transform, "Hand_Minute");
+        }
+
         var go = new GameObject("WallClockText");
-        go.transform.position = new Vector3(0f, 2.22f, -2.567f);
-        go.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+        go.transform.position = pos;
+        go.transform.rotation = rot;
 
         var tm = go.AddComponent<TextMesh>();
         clockMesh = tm;
         tm.font = UiFont;
         tm.fontSize = 128;
-        tm.characterSize = 0.055f;
+        tm.characterSize = 0.0052f;
         tm.anchor = TextAnchor.MiddleCenter;
         tm.alignment = TextAlignment.Center;
         tm.color = new Color(0.55f, 0.60f, 0.55f);
@@ -368,6 +388,12 @@ public class NightDirector : MonoBehaviour
             var mr = go.GetComponent<MeshRenderer>();
             if (mr != null) mr.sharedMaterial = UiFont.material;
         }
+    }
+
+    static void HideClockPart(Transform clock, string name)
+    {
+        Transform part = clock.Find(name);
+        if (part != null) part.gameObject.SetActive(false);
     }
 
     void BuildOverlay()
@@ -521,10 +547,9 @@ public class NightDirector : MonoBehaviour
                 Hint = "←→ каналы   ↑↓ прокрутка   ·   TAB — экран   ·   мышь — обзор";
                 break;
             case StationDesk:
-                string h = "";
-                if (PhoneRinging) h += "телефон: наведите и напечатайте PICK UP   ·   ";
-                else if (PhoneInCall && callStage == 1) h += "телефон: HANG UP   ·   ";
-                h += "1 — таблетка (" + State.pills + ")   ·   2 — диктофон";
+                // Подсказку PICK UP / HANG UP не дублируем в нижней строке:
+                // серая подпись появляется только когда прицел на телефоне.
+                string h = "1 — таблетка (" + State.pills + ")   ·   2 — диктофон";
                 if (recordingAvailable && !State.records[0]) h += " (новая запись)";
                 h += "   ·   TAB — экран   ·   мышь — обзор";
                 Hint = h;
