@@ -2740,6 +2740,60 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 1685201118144421188, guid: 16ee51d0dbe91ee42971364084d74b6d, type: 3}
   m_PrefabInstance: {fileID: 1959521805}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &2005340717
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2005340719}
+  - component: {fileID: 2005340718}
+  m_Layer: 0
+  m_Name: DevPreview
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &2005340718
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2005340717}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d6b5ee140a7355c4a9eb9023f5542f8e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VOID.Dev::VOID.Dev.DevPreviewLook
+  targetCamera: {fileID: 1056756342}
+  anchors:
+  - {fileID: 587092569}
+  - {fileID: 1883967137}
+  - {fileID: 1219892634}
+  - {fileID: 2009950831}
+  sensitivity: 0.12
+  pitchLimit: 80
+  snapTime: 0.15
+  showHint: 1
+--- !u!4 &2005340719
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2005340717}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2009950830
 GameObject:
   m_ObjectHideFlags: 0
@@ -2906,3 +2960,4 @@ SceneRoots:
   - {fileID: 1250232459}
   - {fileID: 557994014}
   - {fileID: 508134869}
+  - {fileID: 2005340719}
