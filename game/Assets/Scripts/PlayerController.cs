@@ -2,12 +2,17 @@ using UnityEngine;
 
 /// <summary>
 /// Управление «по станциям»: свободного перемещения нет.
-/// Герой сидит за столом и переводит взгляд между тремя экранами:
-/// 0 — ноутбук («окно» на глубину), 1 — монитор 1 (терминал), 2 — монитор 2 (ИНЛАЙН).
+/// Герой сидит за столом и переводит взгляд между физическими точками:
+/// 0 — монитор 1 (терминал), 1 — монитор 2 (мессенджер),
+/// 2 — стол (телефон, таблетки, диктофон), 3 — кровать (отдых).
 /// Переключение моментальное: тело не двигается, камера-«голова» сразу
-/// наводится в центр выбранного экрана по его живым координатам.
-/// Клавиши: A/D или ←/→ — соседний экран (по кругу), 1–3 — прямой выбор.
-/// Мыши в игре нет (концепт).
+/// наводится в центр выбранной точки по её живым координатам.
+///
+/// Мышь — свободный обзор вокруг станции (в пределах ±82° по горизонтали
+/// и ±50° по вертикали), чтобы наводить прицел на предметы. Кликов нет.
+/// Повторное нажатие F1–F4 на текущей станции возвращает взгляд в центр.
+/// Клавиши: TAB / Shift+TAB — соседняя станция, F1–F4 — прямой выбор.
+/// Буквы и цифры не заняты переключением: на экранах игрок печатает команды.
 /// </summary>
 [RequireComponent(typeof(CharacterController))]
 public class PlayerController : MonoBehaviour
@@ -24,17 +29,33 @@ public class PlayerController : MonoBehaviour
     [Header("Стартовая станция")]
     public int startStation = 1;
 
-    [Header("Клавиши")]
-    public KeyCode nextKey = KeyCode.RightArrow;
-    public KeyCode nextKeyAlt = KeyCode.D;
-    public KeyCode prevKey = KeyCode.LeftArrow;
-    public KeyCode prevKeyAlt = KeyCode.A;
+    [Header("Клавиши станций")]
+    public KeyCode cycleKey = KeyCode.Tab;                 // Shift+Tab — назад
+    public KeyCode[] directKeys =
+    {
+        KeyCode.F1, KeyCode.F2, KeyCode.F3, KeyCode.F4,
+    };
+
+    [Header("Мышь — обзор вокруг станции")]
+    public float mouseSensitivity = 2.0f;
+    public float maxYaw = 82f;
+    public float maxPitch = 50f;
+
+    [Header("Блокировка (диалоги, провалы, конец ночи)")]
+    public bool inputEnabled = true;   // переключение станций
+    public bool lookEnabled = true;    // обзор мышью
 
     public Transform cameraTransform;
+
+    /// <summary>Индекс текущей станции: 0 терминал, 1 мессенджер, 2 стол, 3 кровать.</summary>
+    public int Current => current;
 
     CharacterController cc;
     Vector3 camLocalPos;
     int current;
+
+    float baseYaw, basePitch;
+    float lookYaw, lookPitch;
 
     void Start()
     {
@@ -64,25 +85,42 @@ public class PlayerController : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Escape))
             SetCursorLocked(Cursor.lockState != CursorLockMode.Locked);
 
+        HandleMouseLook();
+
+        if (!inputEnabled) return;
         if (stations == null || stations.Length == 0) return;
 
         int next = current;
+        bool direct = false;
 
-        if (Input.GetKeyDown(nextKey) || Input.GetKeyDown(nextKeyAlt))
-            next = (current + 1) % stations.Length;
-        else if (Input.GetKeyDown(prevKey) || Input.GetKeyDown(prevKeyAlt))
-            next = (current - 1 + stations.Length) % stations.Length;
+        if (Input.GetKeyDown(cycleKey))
+        {
+            bool back = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+            next = back
+                ? (current - 1 + stations.Length) % stations.Length
+                : (current + 1) % stations.Length;
+        }
         else
         {
-            // 1–3 — прямо на станцию
-            for (int i = 0; i < stations.Length && i < 9; i++)
+            // F1–F4 — напрямую на станцию (цифры заняты вводом)
+            for (int i = 0; i < stations.Length && i < directKeys.Length; i++)
             {
-                if (Input.GetKeyDown(KeyCode.Alpha1 + i))
+                if (Input.GetKeyDown(directKeys[i]))
                 {
                     next = i;
+                    direct = true;
                     break;
                 }
             }
+        }
+
+        if (direct && next == current)
+        {
+            // повторное нажатие клавиши станции — вернуть взгляд в центр
+            lookYaw = 0f;
+            lookPitch = 0f;
+            ApplyLook();
+            return;
         }
 
         if (next != current && stations[next] != null)
@@ -90,6 +128,29 @@ public class PlayerController : MonoBehaviour
             current = next;
             PoseAt(current); // моментально, без анимации
         }
+    }
+
+    // ---------------------------------------------------------------- мышь
+
+    void HandleMouseLook()
+    {
+        if (!lookEnabled || cameraTransform == null) return;
+        if (Cursor.lockState != CursorLockMode.Locked) return;
+
+        float mx = Input.GetAxisRaw("Mouse X") * mouseSensitivity;
+        float my = Input.GetAxisRaw("Mouse Y") * mouseSensitivity;
+        if (Mathf.Abs(mx) < 0.0001f && Mathf.Abs(my) < 0.0001f) return;
+
+        lookYaw = Mathf.Clamp(lookYaw + mx, -maxYaw, maxYaw);
+        lookPitch = Mathf.Clamp(lookPitch + my, -maxPitch, maxPitch);
+        ApplyLook();
+    }
+
+    void ApplyLook()
+    {
+        if (cameraTransform == null) return;
+        Quaternion world = Quaternion.Euler(basePitch - lookPitch, baseYaw + lookYaw, 0f);
+        cameraTransform.localRotation = Quaternion.Inverse(transform.rotation) * world;
     }
 
     // ---------------------------------------------------------------- поза
@@ -116,9 +177,13 @@ public class PlayerController : MonoBehaviour
     {
         ApplyCapsule(IsSeated(i));
         transform.position = stations[i].position - camLocalPos;
-        if (cameraTransform != null)
-            cameraTransform.localRotation =
-                Quaternion.Inverse(transform.rotation) * GazeTo(i, stations[i].position);
+
+        Vector3 e = GazeTo(i, stations[i].position).eulerAngles;
+        basePitch = e.x;
+        baseYaw = e.y;
+        lookPitch = 0f;
+        lookYaw = 0f;
+        ApplyLook();
     }
 
     // ---------------------------------------------------------------- капсула
