@@ -84,7 +84,8 @@ public class OverlayUI : MonoBehaviour
         subtitleStyle.normal.textColor = new Color(0.92f, 0.95f, 0.92f);
 
         actionGray = new GUIStyle(center);
-        actionGray.fontSize = Mathf.RoundToInt(Screen.height * 0.023f);
+        // Подпись действия читается поверх мира с рабочего места — крупнее прочего текста.
+        actionGray.fontSize = Mathf.RoundToInt(Screen.height * 0.036f);
         actionGray.alignment = TextAnchor.MiddleLeft;
         actionGray.wordWrap = false;
         actionGray.normal.textColor = new Color(0.55f, 0.57f, 0.55f, 0.95f);

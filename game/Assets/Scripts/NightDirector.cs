@@ -76,7 +76,7 @@ public class NightDirector : MonoBehaviour
 
     float flashUntil;
     float subtitleUntil;
-    TextMesh clockMesh;
+    Transform clockHourHand, clockMinuteHand;
 
     enum PhoneState { Idle, Ringing, InCall }
     PhoneState phone = PhoneState.Idle;
@@ -355,45 +355,15 @@ public class NightDirector : MonoBehaviour
 
     void BuildWallClock()
     {
-        // Часы друга — аналоговые, со стрелками. Игровое время цифровое,
-        // поэтому стрелки прячем, а на циферблат кладём цифровое время.
+        // Часы друга — аналоговые: циферблат статичный, стрелки крутим кодом
+        // по игровому времени. Цифровую накладку не кладём — она перекрывала бы стрелки.
         GameObject clock = GameObject.Find("WallClock");
-        Vector3 pos = new Vector3(1.35f, 1.9f, -1.95f);
-        Quaternion rot = Quaternion.Euler(0f, 180f, 0f);
+        if (clock == null) return;
 
-        if (clock != null)
-        {
-            Transform face = clock.transform.Find("Face");
-            Vector3 facePos = face != null ? face.position : clock.transform.position;
-            pos = facePos + clock.transform.forward * 0.013f;
-            rot = clock.transform.rotation * Quaternion.Euler(0f, 180f, 0f);
-            HideClockPart(clock.transform, "Hand_Hour");
-            HideClockPart(clock.transform, "Hand_Minute");
-        }
-
-        var go = new GameObject("WallClockText");
-        go.transform.position = pos;
-        go.transform.rotation = rot;
-
-        var tm = go.AddComponent<TextMesh>();
-        clockMesh = tm;
-        tm.font = UiFont;
-        tm.fontSize = 128;
-        tm.characterSize = 0.0052f;
-        tm.anchor = TextAnchor.MiddleCenter;
-        tm.alignment = TextAlignment.Center;
-        tm.color = new Color(0.55f, 0.60f, 0.55f);
-        if (UiFont != null)
-        {
-            var mr = go.GetComponent<MeshRenderer>();
-            if (mr != null) mr.sharedMaterial = UiFont.material;
-        }
-    }
-
-    static void HideClockPart(Transform clock, string name)
-    {
-        Transform part = clock.Find(name);
-        if (part != null) part.gameObject.SetActive(false);
+        // Стрелки — прямые дочерние объекты корня префаба (рядом с Mesh/Face).
+        clockHourHand = clock.transform.Find("Hand_Hour");
+        clockMinuteHand = clock.transform.Find("Hand_Minute");
+        UpdateClockHands();
     }
 
     void BuildOverlay()
@@ -562,7 +532,22 @@ public class NightDirector : MonoBehaviour
 
     void UpdateClockVisual()
     {
-        if (clockMesh != null) clockMesh.text = Clock.Display;
+        UpdateClockHands();
+    }
+
+    /// <summary>
+    /// Стрелки вращаются вокруг локальной Z. 0° — на 12 часов,
+    /// положительный угол — по часовой стрелке (вид с лицевой стороны).
+    /// </summary>
+    void UpdateClockHands()
+    {
+        float minutes = Clock.Minutes;
+
+        if (clockMinuteHand != null)
+            clockMinuteHand.localRotation = Quaternion.Euler(0f, 0f, (minutes % 60f) * 6f);
+
+        if (clockHourHand != null)
+            clockHourHand.localRotation = Quaternion.Euler(0f, 0f, (minutes % 720f) * 0.5f);
     }
 
     void UpdatePhoneLed()
