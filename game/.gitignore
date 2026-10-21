@@ -33,3 +33,6 @@ Thumbs.db
 *.app
 *.x86
 *.x86_64
+
+# Claude Code
+CLAUDE.md
