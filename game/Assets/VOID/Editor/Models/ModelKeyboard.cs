@@ -87,8 +87,8 @@ namespace VOID.EnvModels
 
             PBKit.EditPrefab("PRB_Keyboard", root =>
             {
-                var plastic = PBKit.Mat("MAT_Plastic");
-                GameObject m = PBKit.SetMeshChild(root.transform, "Mesh", mesh, plastic, plastic);
+                GameObject m = PBKit.SetMeshChild(root.transform, "Mesh", mesh,
+                    PBKit.Mat("MAT_Plastic"), PBKit.Mat("MAT_Plastic_Keys"));
                 PBKit.FitBox(root.GetComponent<BoxCollider>(), mesh, m.transform, root.transform);
             });
         }
