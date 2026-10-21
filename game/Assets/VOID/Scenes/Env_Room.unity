@@ -2407,6 +2407,30 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 102783702}
     m_Modifications:
+    - target: {fileID: 1121868302994139220, guid: 56c8143ba2fdb7e4292929e5114be701, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0.38
+      objectReference: {fileID: 0}
+    - target: {fileID: 1121868302994139220, guid: 56c8143ba2fdb7e4292929e5114be701, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0.74
+      objectReference: {fileID: 0}
+    - target: {fileID: 1121868302994139220, guid: 56c8143ba2fdb7e4292929e5114be701, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -1.62
+      objectReference: {fileID: 0}
+    - target: {fileID: 1121868302994139220, guid: 56c8143ba2fdb7e4292929e5114be701, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0.9961947
+      objectReference: {fileID: 0}
+    - target: {fileID: 1121868302994139220, guid: 56c8143ba2fdb7e4292929e5114be701, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0.08715574
+      objectReference: {fileID: 0}
+    - target: {fileID: 1175347671275007015, guid: 56c8143ba2fdb7e4292929e5114be701, type: 3}
+      propertyPath: m_Name
+      value: Monitor_Terminal
+      objectReference: {fileID: 0}
     - target: {fileID: 8000059967645552109, guid: 56c8143ba2fdb7e4292929e5114be701, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0.38
@@ -2458,7 +2482,7 @@ PrefabInstance:
   m_SourcePrefab: {fileID: 100100000, guid: 56c8143ba2fdb7e4292929e5114be701, type: 3}
 --- !u!4 &1564008119 stripped
 Transform:
-  m_CorrespondingSourceObject: {fileID: 8000059967645552109, guid: 56c8143ba2fdb7e4292929e5114be701, type: 3}
+  m_CorrespondingSourceObject: {fileID: 1121868302994139220, guid: 56c8143ba2fdb7e4292929e5114be701, type: 3}
   m_PrefabInstance: {fileID: 1564008118}
   m_PrefabAsset: {fileID: 0}
 --- !u!1001 &1629197510
@@ -2899,6 +2923,30 @@ PrefabInstance:
       propertyPath: m_Name
       value: Monitor_Chat
       objectReference: {fileID: 0}
+    - target: {fileID: 5267007668655680584, guid: d8728adc6d19c67458a0c91e5f08089a, type: 3}
+      propertyPath: m_Name
+      value: Monitor_Chat
+      objectReference: {fileID: 0}
+    - target: {fileID: 6252732052386048059, guid: d8728adc6d19c67458a0c91e5f08089a, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -0.38
+      objectReference: {fileID: 0}
+    - target: {fileID: 6252732052386048059, guid: d8728adc6d19c67458a0c91e5f08089a, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0.74
+      objectReference: {fileID: 0}
+    - target: {fileID: 6252732052386048059, guid: d8728adc6d19c67458a0c91e5f08089a, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -1.62
+      objectReference: {fileID: 0}
+    - target: {fileID: 6252732052386048059, guid: d8728adc6d19c67458a0c91e5f08089a, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0.9961947
+      objectReference: {fileID: 0}
+    - target: {fileID: 6252732052386048059, guid: d8728adc6d19c67458a0c91e5f08089a, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0.08715574
+      objectReference: {fileID: 0}
     - target: {fileID: 9081558073642503715, guid: d8728adc6d19c67458a0c91e5f08089a, type: 3}
       propertyPath: m_LocalPosition.x
       value: -0.38
@@ -2946,7 +2994,7 @@ PrefabInstance:
   m_SourcePrefab: {fileID: 100100000, guid: d8728adc6d19c67458a0c91e5f08089a, type: 3}
 --- !u!4 &2106941967 stripped
 Transform:
-  m_CorrespondingSourceObject: {fileID: 9081558073642503715, guid: d8728adc6d19c67458a0c91e5f08089a, type: 3}
+  m_CorrespondingSourceObject: {fileID: 6252732052386048059, guid: d8728adc6d19c67458a0c91e5f08089a, type: 3}
   m_PrefabInstance: {fileID: 2106941966}
   m_PrefabAsset: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
