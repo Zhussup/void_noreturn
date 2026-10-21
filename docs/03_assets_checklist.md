@@ -25,7 +25,7 @@ Assets/VOID/
   Prefabs/                PRB_*.prefab — комната, мебель, техника, реквизит
   Scenes/
     Env_Room.unity        исходная комната друга (не изменяется билдером)
-  Materials/              служебные материалы, созданные билдером (phone_led)
+  Materials/              служебные материалы билдера (phone_led, player_body)
   .initialized_home2      маркер автосборки сцены
 ```
 
@@ -45,10 +45,11 @@ Assets/VOID/Design/
 `Room`, `Floor`, `Ceiling`, `Wall_North`, `Wall_South`, `Wall_East`, `Wall_West`,
 `WindowFrame`, `WindowView`, `Door`, `Desk`, `Chair`, `Bed`, `Shelf`,
 `Monitor_Terminal`, `Monitor_Chat`, `Laptop`, `Phone`, `Pills`, `Glass`, `Mug`,
-`Recorder`, `WallClock`, `Phone_LED`, `WallClockText`.
+`Recorder`, `WallClock`, `Phone_LED`.
 
-- `Phone_LED` и `WallClockText` создаёт `VoidSceneBuilder`; остальное приходит
-  из префабов друга.
+- `Phone_LED` создаёт `VoidSceneBuilder`; остальное приходит из префабов друга.
+- Стрелки `Hand_Hour` и `Hand_Minute` внутри `PRB_WallClock` крутит `NightDirector`
+  по `GameClock` — отдельного объекта с цифровым временем на циферблате нет.
 - В исходной сцене имена `Wall_East` и `Wall_West` перепутаны местами:
   `Wall_West` стоит на `x = +2.25`, `Wall_East` — на `x = −2.25`. Не «исправляй»
   это переименованием — сломаются ссылки.
@@ -60,6 +61,8 @@ Assets/VOID/Design/
 
 **Важно:** префабы ссылаются на материалы по GUID. Переносить `.mat` или
 переименовывать `.meta` нельзя — только вместе с обновлением ссылок.
+Дубли материалов из старой процедурной ветки удалены: единственный набор
+материалов комнаты — `Art/Materials/MAT_*`.
 
 ---
 
@@ -74,7 +77,7 @@ Assets/VOID/Design/
 | Дверь | `PRB_Door` | полотно, ручка | [x] |
 | Радиатор | `PRB_Radiator` | под окном | [x] |
 | Постер | `PRB_Poster` | северная стена | [x] |
-| Часы | `PRB_WallClock` | аналоговый корпус; стрелки скрывает билдер | [x] |
+| Часы | `PRB_WallClock` | аналоговый корпус; стрелки крутит `NightDirector` по `GameClock` | [x] |
 | Полка | `PRB_Shelf` | западная стена | [x] |
 | Мусорка | `PRB_TrashBin` | у западной стены | [x] |
 | Одежда | `PRB_Clothes` | на полу у кровати | [x] |
@@ -161,7 +164,7 @@ Assets/VOID/Design/
 
 | Шрифт | Использование | Лицензия |
 |---|---|---|
-| DejaVu Sans Mono | экраны, часы | свободная (Bitstream Vera / DejaVu) |
+| DejaVu Sans Mono | экраны, оверлей | свободная (Bitstream Vera / DejaVu) |
 | Резервный | если DejaVu нет в системе — `LegacyRuntime.ttf` | Unity |
 
 Дизайнерские шрифты для макетов — только OFL/Apache/CC0; указать источник в
@@ -173,6 +176,8 @@ Assets/VOID/Design/
 - **Текстуры:** PNG/TGA, степень двойки (1024/2048), sRGB для Albedo, Linear для
   Metallic/Smoothness/Normal.
 - **Материалы:** Standard shader; без URP/HDRP; эмиссия — только экраны, LED, окно.
+- **Цветовое пространство:** Linear (Project Settings → Player → Color Space);
+  Gamma не возвращать — на Linear корректнее считается свет.
 - **Аудио:** WAV, 48 кГц, 16 бит; loop-точки для фонов; нормализация −16 LUFS.
 - **Макеты:** Figma/PSD слоями + PNG 1920×1080; сетка 60×19 обязательна.
 
@@ -180,7 +185,7 @@ Assets/VOID/Design/
 
 - [ ] Ассеты лежат в своих папках, имена по контракту.
 - [ ] Импорт не ломает сцену: объекты на местах, станции работают.
-- [ ] Материалы на Standard/Unlit, без розового.
+- [ ] Материалы на Standard/Unlit, без розового; проект в Linear color space.
 - [ ] Текст на экранах не перекрыт моделями и рамками.
 - [ ] Таблетки/диктофон/телефон физически читаются в кадре.
 - [ ] Звук не клиппит, звонок слышен с любой станции.

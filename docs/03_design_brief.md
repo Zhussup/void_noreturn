@@ -141,9 +141,10 @@
 - Имена объектов — контракт. Скрипты ищут:
   `Monitor_Terminal`, `Monitor_Chat`, `Laptop`, `Phone`, `Phone_LED`, `Pills`,
   `Recorder` (запасной вариант — `Dictaphone`), `Bed`, `Desk`, `Chair`,
-  `WallClock`, `WallClockText`, `Station_Terminal`, `Station_Messenger`,
+  `WallClock`, `Station_Terminal`, `Station_Messenger`,
   `Station_Desk`, `Station_Bed`, `Desk_LookTarget`, `Bed_LookTarget`.
-  `Phone_LED` и `WallClockText` создаёт сам билдер, остальное — из комнаты друга.
+  `Phone_LED` создаёт сам билдер; остальное — из комнаты друга.
+  Стрелки `WallClock` крутит `NightDirector` по `GameClock`.
   Переименование — только синхронно с кодом.
 
 ---
