@@ -25,6 +25,13 @@ namespace VOID.EnvModels
 
             public ProBuilderMesh Add(ProBuilderMesh pb, int sub)
             {
+                // NaN в вершинах подвешивает развёртку UV — падаем сразу и понятно
+                foreach (Vector3 p in pb.positions)
+                    if (float.IsNaN(p.x) || float.IsNaN(p.y) || float.IsNaN(p.z))
+                    {
+                        Object.DestroyImmediate(pb.gameObject);
+                        throw new System.ArgumentException("[VOID] NaN в вершинах детали");
+                    }
                 parts.Add((pb, sub));
                 return pb;
             }
@@ -45,6 +52,14 @@ namespace VOID.EnvModels
                     c[i] = center + rot * p;
                 }
                 return Hex(c, bevel, sub);
+            }
+
+            /// <summary>Брусок сечением w × h между точками a и b (рёбра со скосом).</summary>
+            public ProBuilderMesh Beam(Vector3 a, Vector3 b, float w, float h, float bevel, int sub, Vector3 up)
+            {
+                Vector3 dir = b - a;
+                if (Mathf.Abs(Vector3.Dot(dir.normalized, up.normalized)) > 0.99f) up = Vector3.forward;
+                return Box((a + b) * 0.5f, new Vector3(w, h, dir.magnitude), bevel, sub, Quaternion.LookRotation(dir, up));
             }
 
             /// <summary>
@@ -209,11 +224,31 @@ namespace VOID.EnvModels
                 F.Add(new Face(new[] { i, i + 1, i + 2, i, i + 2, i + 3 }) { smoothingGroup = smoothing });
             }
 
+            public void Tri(Vector3 a, Vector3 b, Vector3 c, Vector3 hint, int smoothing = 0)
+            {
+                if (Vector3.Dot(Vector3.Cross(b - a, c - a), hint) < 0f)
+                {
+                    var t = b; b = c; c = t;
+                }
+                int i = P.Count;
+                P.Add(a); P.Add(b); P.Add(c);
+                F.Add(new Face(new[] { i, i + 1, i + 2 }) { smoothingGroup = smoothing });
+            }
+
             /// <summary>
             /// Тело вращения вокруг оси Z (центр — center). profile — точки (радиус, z);
             /// нормаль сегмента (dz, −dr) должна смотреть наружу при обходе профиля.
             /// </summary>
             public void Lathe(Vector3 center, IList<Vector2> profile, int sides)
+            {
+                Lathe(center, profile, sides, Quaternion.identity, 0);
+            }
+
+            /// <summary>
+            /// То же, но ось Z профиля поворачивается rot (например, к +Y для кружки),
+            /// smoothing — группа сглаживания боковых граней. Точки с радиусом 0 дают треугольники.
+            /// </summary>
+            public void Lathe(Vector3 center, IList<Vector2> profile, int sides, Quaternion rot, int smoothing)
             {
                 for (int s = 0; s < sides; s++)
                 {
@@ -223,16 +258,81 @@ namespace VOID.EnvModels
                     for (int j = 0; j < profile.Count - 1; j++)
                     {
                         Vector2 p = profile[j], q = profile[j + 1];
-                        Vector3 a = center + d0 * p.x + Vector3.forward * p.y;
-                        Vector3 b = center + d1 * p.x + Vector3.forward * p.y;
-                        Vector3 c = center + d1 * q.x + Vector3.forward * q.y;
-                        Vector3 d = center + d0 * q.x + Vector3.forward * q.y;
+                        Vector3 a = center + rot * (d0 * p.x + Vector3.forward * p.y);
+                        Vector3 b = center + rot * (d1 * p.x + Vector3.forward * p.y);
+                        Vector3 c = center + rot * (d1 * q.x + Vector3.forward * q.y);
+                        Vector3 d = center + rot * (d0 * q.x + Vector3.forward * q.y);
                         Vector3 radial = (d0 + d1).normalized;
-                        Vector3 hint = radial * (q.y - p.y) + Vector3.forward * (p.x - q.x);
-                        Quad(a, b, c, d, hint);
+                        Vector3 hint = rot * (radial * (q.y - p.y) + Vector3.forward * (p.x - q.x));
+                        if (p.x < 1e-6f) Tri(a, c, d, hint, smoothing);
+                        else if (q.x < 1e-6f) Tri(a, b, c, hint, smoothing);
+                        else Quad(a, b, c, d, hint, smoothing);
                     }
                 }
             }
+
+            /// <summary>Трубка постоянного радиуса по ломаной; сечение — sides-угольник.</summary>
+            public void Tube(IList<Vector3> path, float radius, int sides, int smoothing = 1)
+            {
+                var rings = new List<Vector3[]>();
+                Vector3 prevU = Vector3.zero;
+                for (int i = 0; i < path.Count; i++)
+                {
+                    Vector3 tan = (path[Mathf.Min(path.Count - 1, i + 1)] - path[Mathf.Max(0, i - 1)]).normalized;
+                    Vector3 u = i == 0 ? Vector3.ProjectOnPlane(Vector3.up, tan) : Vector3.ProjectOnPlane(prevU, tan);
+                    if (u.sqrMagnitude < 1e-8f) u = Vector3.ProjectOnPlane(Vector3.right, tan);
+                    u.Normalize();
+                    prevU = u;
+                    Vector3 v = Vector3.Cross(tan, u);
+                    var ring = new Vector3[sides];
+                    for (int k = 0; k < sides; k++)
+                    {
+                        float a = k * Mathf.PI * 2f / sides;
+                        ring[k] = path[i] + radius * (Mathf.Cos(a) * u + Mathf.Sin(a) * v);
+                    }
+                    rings.Add(ring);
+                }
+                for (int i = 0; i < path.Count - 1; i++)
+                    for (int k = 0; k < sides; k++)
+                    {
+                        int k1 = (k + 1) % sides;
+                        Vector3 a = rings[i][k], b = rings[i][k1], c = rings[i + 1][k1], d = rings[i + 1][k];
+                        Vector3 mid = (path[i] + path[i + 1]) * 0.5f;
+                        Quad(a, b, c, d, (a + b + c + d) * 0.25f - mid, smoothing);
+                    }
+            }
+
+            /// <summary>
+            /// Поверхность-сетка nx × nz над прямоугольником [x0..x1]×[z0..z1];
+            /// pos(u, v) возвращает точку по нормированным координатам 0..1. Нормаль — по hint.
+            /// </summary>
+            public void Grid(int nx, int nz, System.Func<float, float, Vector3> pos, Vector3 hint, int smoothing = 1)
+            {
+                for (int i = 0; i < nx; i++)
+                    for (int j = 0; j < nz; j++)
+                    {
+                        float u0 = i / (float)nx, u1 = (i + 1) / (float)nx;
+                        float v0 = j / (float)nz, v1 = (j + 1) / (float)nz;
+                        Quad(pos(u0, v0), pos(u1, v0), pos(u1, v1), pos(u0, v1), hint, smoothing);
+                    }
+            }
+        }
+
+        /// <summary>Сглаженная кривая Catmull-Rom через опорные точки, seg отрезков на участок.</summary>
+        public static List<Vector3> Spline(IList<Vector3> pts, int seg)
+        {
+            var res = new List<Vector3>();
+            for (int i = 0; i < pts.Count - 1; i++)
+            {
+                Vector3 p0 = pts[Mathf.Max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Mathf.Min(pts.Count - 1, i + 2)];
+                for (int s = 0; s < seg; s++)
+                {
+                    float t = s / (float)seg, t2 = t * t, t3 = t2 * t;
+                    res.Add(0.5f * (2f * p1 + (-p0 + p2) * t + (2f * p0 - 5f * p1 + 4f * p2 - p3) * t2 + (-p0 + 3f * p1 - 3f * p2 + p3) * t3));
+                }
+            }
+            res.Add(pts[pts.Count - 1]);
+            return res;
         }
 
         static Bounds Bounds(ProBuilderMesh pb)
@@ -287,7 +387,47 @@ namespace VOID.EnvModels
             return m;
         }
 
+        /// <summary>
+        /// MAT_Glass — прозрачный Standard (режим Transparent) для стёкол окна
+        /// и стакана. Создаётся при первом вызове.
+        /// </summary>
+        public static Material GlassMat()
+        {
+            string path = MaterialsDir + "/MAT_Glass.mat";
+            var m = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (m != null) return m;
+
+            m = new Material(Shader.Find("Standard")) { name = "MAT_Glass" };
+            m.SetColor("_Color", new Color(0.78f, 0.86f, 0.9f, 0.16f));
+            m.SetFloat("_Glossiness", 0.95f);
+            m.SetFloat("_Metallic", 0f);
+            m.SetFloat("_Mode", 3f);
+            m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.One);
+            m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            m.SetInt("_ZWrite", 0);
+            m.DisableKeyword("_ALPHATEST_ON");
+            m.DisableKeyword("_ALPHABLEND_ON");
+            m.EnableKeyword("_ALPHAPREMULTIPLY_ON");
+            m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            AssetDatabase.CreateAsset(m, path);
+            return m;
+        }
+
         // ------------------------------------------------------------ префабы
+
+        /// <summary>
+        /// Создаёт пустой префаб-корень PRB_*, если его ещё нет (для реквизита,
+        /// которого не было в greybox). collider — добавить BoxCollider на корень.
+        /// </summary>
+        public static void EnsurePrefab(string prefabName, bool collider)
+        {
+            string path = PrefabsDir + "/" + prefabName + ".prefab";
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(path) != null) return;
+            var root = new GameObject(prefabName);
+            if (collider) root.AddComponent<BoxCollider>();
+            PrefabUtility.SaveAsPrefabAsset(root, path);
+            Object.DestroyImmediate(root);
+        }
 
         /// <summary>Открывает префаб, отдаёт корень в правку и сохраняет.</summary>
         public static void EditPrefab(string prefabName, System.Action<GameObject> edit)
