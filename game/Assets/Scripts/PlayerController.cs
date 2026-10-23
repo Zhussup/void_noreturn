@@ -5,15 +5,19 @@ using UnityEngine;
 /// Герой сидит за столом и переводит взгляд между физическими точками:
 /// 0 — монитор 1 (терминал), 1 — монитор 2 (мессенджер),
 /// 2 — стол (телефон, таблетки, диктофон), 3 — кровать (отдых).
-/// Переключение моментальное: тело не двигается, камера-«голова» сразу
-/// наводится в центр выбранной точки по её живым координатам.
+/// Переключение сглаженное: камера-«голова» за доли секунды перелетает
+/// в центр выбранной точки по её живым координатам, а обзор мышью
+/// догоняет ввод с мягкой инерцией.
 ///
 /// Мышь — свободный обзор вокруг станции (в пределах ±82° по горизонтали
 /// и ±50° по вертикали), чтобы наводить прицел на предметы. Кликов нет.
 /// Повторное нажатие F1–F4 на текущей станции возвращает взгляд в центр.
-/// Клавиши: TAB / Shift+TAB — соседняя станция, F1–F4 — прямой выбор.
-/// Буквы и цифры не заняты переключением: на экранах игрок печатает команды.
+/// Клавиши: TAB / Shift+TAB — соседняя станция, F1–F4 — прямой выбор,
+/// Z (удерживать) — плавный зум камеры.
+/// Буквы и цифры не заняты переключением: на экранах игрок печатает команды,
+/// поэтому зум отключается, пока приложение принимает текст.
 /// </summary>
+[DefaultExecutionOrder(-100)] // раньше NightDirector: E успевает забрать фокус до строк ввода
 [RequireComponent(typeof(CharacterController))]
 public class PlayerController : MonoBehaviour
 {
@@ -41,11 +45,43 @@ public class PlayerController : MonoBehaviour
     public float maxYaw = 82f;
     public float maxPitch = 50f;
 
+    [Header("Сглаживание камеры")]
+    [Tooltip("Скорость перелёта взгляда между станциями")]
+    public float moveLerp = 7f;
+    [Tooltip("Сглаживание мыши: меньше — плавнее и с запаздыванием")]
+    public float lookLerp = 20f;
+
+    [Header("Зум камеры (Z, удерживать)")]
+    public KeyCode zoomKey = KeyCode.Z;
+    [Tooltip("Во сколько раз сужается FOV в максимальном зуме")]
+    [Range(0.2f, 0.9f)] public float zoomFovScale = 0.55f;
+    public float zoomLerp = 8f;
+    public float zoomMinFov = 8f;
+
+    [Header("Приближение монитора (E)")]
+    public KeyCode focusKey = KeyCode.E;
+    [Range(0.4f, 0.95f)] public float focusScreenFill = 0.70f; // доля ширины кадра
+    public float focusLerp = 9f;
+    public float focusMaxDistance = 3f;
+
     [Header("Блокировка (диалоги, провалы, конец ночи)")]
     public bool inputEnabled = true;   // переключение станций
     public bool lookEnabled = true;    // обзор мышью
 
     public Transform cameraTransform;
+
+    /// <summary>Приложение сейчас принимает текст: E должна печататься, а не приближать.</summary>
+    public bool TextInputActive { get; set; }
+
+    public bool MonitorFocused => focusScreen != null;
+    public bool CanFocusMonitor => focusScreen == null && aimMonitor != null && !TextInputActive;
+
+    /// <summary>Esc в этом кадре уже закрыла приближение монитора.</summary>
+    public bool EscapeClearedFocus { get; private set; }
+
+    /// <summary>Z удерживается: камера плавно сужает кадр.</summary>
+    public bool Zooming =>
+        lookEnabled && inputEnabled && !TextInputActive && Input.GetKey(zoomKey);
 
     /// <summary>Индекс текущей станции: 0 терминал, 1 мессенджер, 2 стол, 3 кровать.</summary>
     public int Current => current;
@@ -54,20 +90,49 @@ public class PlayerController : MonoBehaviour
     Vector3 camLocalPos;
     int current;
 
+    Camera cam;
+    float baseFov = 45f;
+    float focusFov = 45f;
+    float focusBlend;
+    float zoomBlend;
+    Quaternion focusWorldRot;
+    Transform aimMonitor;
+    Transform focusScreen;
+    readonly RaycastHit[] aimHits = new RaycastHit[16];
+
+    // E, которую забрал фокус, не должна попасть в строку ввода приложения.
+    static bool focusKeyCharPending;
+    // Z, которую забрал зум, не должна стать «неверной буквой» в подписи действия.
+    static bool zoomKeyCharPending;
+
     float baseYaw, basePitch;
     float lookYaw, lookPitch;
+
+    // Куда камера едет и куда доворачивается; мышь задаёт цель, а не кадр.
+    Vector3 poseTarget;
+    float baseTargetYaw, baseTargetPitch;
+    float lookTargetYaw, lookTargetPitch;
+    bool posed;
 
     void Start()
     {
         cc = GetComponent<CharacterController>();
         if (cameraTransform == null)
         {
-            Camera cam = GetComponentInChildren<Camera>();
-            if (cam != null) cameraTransform = cam.transform;
+            Camera foundCam = GetComponentInChildren<Camera>();
+            if (foundCam != null) cameraTransform = foundCam.transform;
         }
         camLocalPos = cameraTransform != null
             ? cameraTransform.localPosition
             : new Vector3(0f, 0.72f, 0f);
+
+        cam = cameraTransform != null ? cameraTransform.GetComponent<Camera>() : null;
+        if (cam == null) cam = GetComponentInChildren<Camera>();
+        if (cam != null)
+        {
+            baseFov = cam.fieldOfView;
+            focusFov = baseFov;
+        }
 
         if (stations == null || stations.Length == 0 || stations[0] == null)
         {
@@ -76,20 +141,40 @@ public class PlayerController : MonoBehaviour
         }
 
         current = Mathf.Clamp(startStation, 0, stations.Length - 1);
-        PoseAt(current);
+        PoseAt(current, true);
         SetCursorLocked(true);
     }
 
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.Escape))
-            SetCursorLocked(Cursor.lockState != CursorLockMode.Locked);
+        focusKeyCharPending = false;
+        zoomKeyCharPending = false;
+        EscapeClearedFocus = false;
 
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            if (MonitorFocused)
+            {
+                ClearFocus();
+                EscapeClearedFocus = true;
+            }
+            else SetCursorLocked(Cursor.lockState != CursorLockMode.Locked);
+        }
+
+        UpdateAim();
+        HandleMonitorFocus();
+        HandleZoom();
         HandleMouseLook();
 
-        if (!inputEnabled) return;
-        if (stations == null || stations.Length == 0) return;
+        if (inputEnabled && stations != null && stations.Length > 0)
+            HandleStations();
 
+        UpdateSmoothPose(Time.deltaTime);
+        UpdateFocus(Time.deltaTime);
+    }
+
+    void HandleStations()
+    {
         int next = current;
         bool direct = false;
 
@@ -117,23 +202,174 @@ public class PlayerController : MonoBehaviour
         if (direct && next == current)
         {
             // повторное нажатие клавиши станции — вернуть взгляд в центр
-            lookYaw = 0f;
-            lookPitch = 0f;
-            ApplyLook();
+            lookTargetYaw = 0f;
+            lookTargetPitch = 0f;
             return;
         }
 
         if (next != current && stations[next] != null)
         {
+            ClearFocus(true); // смена станции — сразу возвращаем кадр
             current = next;
-            PoseAt(current); // моментально, без анимации
+            PoseAt(current);  // камера плавно перелетает к новой точке
         }
+    }
+
+    // ---------------------------------------------------------------- монитор
+
+    /// <summary>Луч из центра кадра: наведён ли прицел на один из мониторов.</summary>
+    void UpdateAim()
+    {
+        aimMonitor = null;
+        if (cameraTransform == null || cam == null) return;
+        if (MonitorFocused || !inputEnabled || !lookEnabled || TextInputActive) return;
+        if (current != 0 && current != 1) return; // мониторы стоят на станциях 0 и 1
+
+        Vector3 origin = cameraTransform.position + cameraTransform.forward * 0.05f;
+        int count = Physics.RaycastNonAlloc(origin, cameraTransform.forward, aimHits,
+                                            focusMaxDistance, ~0,
+                                            QueryTriggerInteraction.Ignore);
+
+        // ближайший объект, который не принадлежит самому игроку
+        Transform nearest = null;
+        float nearestDist = float.MaxValue;
+        for (int i = 0; i < count; i++)
+        {
+            Transform t = aimHits[i].collider.transform;
+            if (t.IsChildOf(transform)) continue;
+            if (aimHits[i].distance < nearestDist)
+            {
+                nearest = t;
+                nearestDist = aimHits[i].distance;
+            }
+        }
+
+        if (nearest != null &&
+            (nearest.name == "Monitor_Terminal" || nearest.name == "Monitor_Chat"))
+            aimMonitor = nearest;
+    }
+
+    void HandleMonitorFocus()
+    {
+        if (!inputEnabled || !Input.GetKeyDown(focusKey)) return;
+
+        if (MonitorFocused)
+        {
+            // пока приложение ждёт текст, E — обычная буква (APPROVE, help, exit);
+            // выйти из приближения можно ESC или сменой станции
+            if (TextInputActive) return;
+
+            focusKeyCharPending = true; // E не должна напечататься в приложении
+            ClearFocus();
+            return;
+        }
+
+        if (aimMonitor == null || TextInputActive) return;
+
+        focusKeyCharPending = true; // E отдана приближению, а не строке ввода
+        EnterFocus(aimMonitor);
+    }
+
+    void EnterFocus(Transform monitor)
+    {
+        Transform screen = monitor.Find("Screen");
+        if (screen == null) screen = monitor;
+        focusScreen = screen;
+
+        Vector3 eye = cameraTransform.position;
+        Vector3 dir = screen.position - eye;
+        if (dir.sqrMagnitude < 0.0001f) dir = cameraTransform.forward;
+
+        focusWorldRot = Quaternion.LookRotation(dir.normalized, Vector3.up);
+        focusFov = FocusFov(Mathf.Abs(screen.lossyScale.x), dir.magnitude);
+    }
+
+    /// <summary>FOV, при котором экран занимает focusScreenFill ширины кадра.</summary>
+    float FocusFov(float screenWidth, float distance)
+    {
+        if (cam == null) return baseFov;
+
+        float halfAngle = Mathf.Atan(Mathf.Max(0.02f, screenWidth) * 0.5f /
+                                     Mathf.Max(0.05f, distance));
+        float fill = Mathf.Clamp(focusScreenFill, 0.4f, 0.95f);
+        float hFov = 2f * halfAngle / fill;
+        float vFov = 2f * Mathf.Atan(Mathf.Tan(hFov * 0.5f) /
+                                     Mathf.Max(0.1f, cam.aspect));
+        return Mathf.Clamp(vFov * Mathf.Rad2Deg, 8f, 30f);
+    }
+
+    /// <summary>Выйти из приближения. immediate — без плавного возврата (смена станции).</summary>
+    public void ClearFocus(bool immediate = false)
+    {
+        focusScreen = null;
+        if (!immediate) return;
+
+        focusBlend = 0f;
+        ApplyLook();
+        if (cam != null) cam.fieldOfView = baseFov;
+    }
+
+    void UpdateFocus(float dt)
+    {
+        if (cameraTransform == null) return;
+
+        float target = MonitorFocused ? 1f : 0f;
+        focusBlend = Mathf.Lerp(focusBlend, target, 1f - Mathf.Exp(-focusLerp * dt));
+        if (Mathf.Abs(focusBlend - target) < 0.001f) focusBlend = target;
+
+        float targetZoom = Zooming ? 1f : 0f;
+        zoomBlend = Mathf.Lerp(zoomBlend, targetZoom, 1f - Mathf.Exp(-zoomLerp * dt));
+        if (Mathf.Abs(zoomBlend - targetZoom) < 0.001f) zoomBlend = targetZoom;
+
+        Quaternion normal = Quaternion.Euler(basePitch - lookPitch, baseYaw + lookYaw, 0f);
+        Quaternion world = focusBlend > 0f
+            ? Quaternion.Slerp(normal, focusWorldRot, focusBlend)
+            : normal;
+        cameraTransform.localRotation = Quaternion.Inverse(transform.rotation) * world;
+
+        if (cam != null)
+        {
+            float fov = Mathf.Lerp(baseFov, focusFov, focusBlend);
+            fov *= Mathf.Lerp(1f, zoomFovScale, zoomBlend);
+            cam.fieldOfView = Mathf.Max(zoomMinFov, fov);
+        }
+    }
+
+    /// <summary>Съесть E, которую фокус забрал у строки ввода.</summary>
+    public static bool ConsumeFocusKeyChar(char c)
+    {
+        if (!focusKeyCharPending) return false;
+        if (c != 'e' && c != 'E') return false;
+        focusKeyCharPending = false;
+        return true;
+    }
+
+    // ---------------------------------------------------------------- зум
+
+    /// <summary>
+    /// Z отдана зуму, а не подписи действия: иначе при прицеле на предмет
+    /// она мигала бы как «неверная буква».
+    /// </summary>
+    void HandleZoom()
+    {
+        if (!Zooming) return;
+        if (Input.GetKeyDown(zoomKey)) zoomKeyCharPending = true;
+    }
+
+    /// <summary>Съесть Z, которую зум забрал у подписи действия / строки ввода.</summary>
+    public static bool ConsumeZoomKeyChar(char c)
+    {
+        if (!zoomKeyCharPending) return false;
+        if (c != 'z' && c != 'Z') return false;
+        zoomKeyCharPending = false;
+        return true;
     }
 
     // ---------------------------------------------------------------- мышь
 
     void HandleMouseLook()
     {
+        if (MonitorFocused) return; // в приближении кадр держится на экране
         if (!lookEnabled || cameraTransform == null) return;
         if (Cursor.lockState != CursorLockMode.Locked) return;
 
@@ -141,9 +377,23 @@ public class PlayerController : MonoBehaviour
         float my = Input.GetAxisRaw("Mouse Y") * mouseSensitivity;
         if (Mathf.Abs(mx) < 0.0001f && Mathf.Abs(my) < 0.0001f) return;
 
-        lookYaw = Mathf.Clamp(lookYaw + mx, -maxYaw, maxYaw);
-        lookPitch = Mathf.Clamp(lookPitch + my, -maxPitch, maxPitch);
-        ApplyLook();
+        lookTargetYaw = Mathf.Clamp(lookTargetYaw + mx, -maxYaw, maxYaw);
+        lookTargetPitch = Mathf.Clamp(lookTargetPitch + my, -maxPitch, maxPitch);
+    }
+
+    /// <summary>Плавно подтягивает позицию и углы к целям (станция и мышь).</summary>
+    void UpdateSmoothPose(float dt)
+    {
+        if (!posed || cameraTransform == null) return;
+
+        float mk = 1f - Mathf.Exp(-moveLerp * dt);
+        transform.position = Vector3.Lerp(transform.position, poseTarget, mk);
+        baseYaw = Mathf.LerpAngle(baseYaw, baseTargetYaw, mk);
+        basePitch = Mathf.LerpAngle(basePitch, baseTargetPitch, mk);
+
+        float lk = 1f - Mathf.Exp(-lookLerp * dt);
+        lookYaw = Mathf.LerpAngle(lookYaw, lookTargetYaw, lk);
+        lookPitch = Mathf.LerpAngle(lookPitch, lookTargetPitch, lk);
     }
 
     void ApplyLook()
@@ -173,17 +423,29 @@ public class PlayerController : MonoBehaviour
         return (f != null ? f.position : stations[i].position + stations[i].forward * 2f);
     }
 
-    void PoseAt(int i)
+    /// <summary>Поза станции. snap — поставить камеру сразу, без перелёта.</summary>
+    void PoseAt(int i, bool snap = false)
     {
         ApplyCapsule(IsSeated(i));
-        transform.position = stations[i].position - camLocalPos;
+        poseTarget = stations[i].position - camLocalPos;
 
         Vector3 e = GazeTo(i, stations[i].position).eulerAngles;
-        basePitch = e.x;
-        baseYaw = e.y;
-        lookPitch = 0f;
-        lookYaw = 0f;
-        ApplyLook();
+        baseTargetPitch = e.x;
+        baseTargetYaw = e.y;
+        lookTargetYaw = 0f;
+        lookTargetPitch = 0f;
+
+        if (snap)
+        {
+            transform.position = poseTarget;
+            basePitch = baseTargetPitch;
+            baseYaw = baseTargetYaw;
+            lookYaw = 0f;
+            lookPitch = 0f;
+            ApplyLook();
+        }
+
+        posed = true;
     }
 
     // ---------------------------------------------------------------- капсула

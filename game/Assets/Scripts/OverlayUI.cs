@@ -14,7 +14,8 @@ public class OverlayUI : MonoBehaviour
     Texture2D white;
 
     GUIStyle center, title, endStyle, callName, callLine, callInput, hintStyle, subtitleStyle;
-    GUIStyle actionGray, actionTyped, actionError;
+    GUIStyle actionGray, actionTyped, actionError, settingsTitle, settingsOption, settingsValue;
+    float styledScale = -1f;
 
     public void Init(NightDirector director, Font uiFont)
     {
@@ -43,49 +44,51 @@ public class OverlayUI : MonoBehaviour
 
     void EnsureStyles()
     {
-        if (center != null) return;
+        float s = dir != null ? dir.UiScale : 1f;
+        if (center != null && Mathf.Abs(styledScale - s) < 0.0001f) return;
+        styledScale = s;
 
         center = new GUIStyle(GUI.skin.label);
         center.font = font;
-        center.fontSize = Mathf.RoundToInt(Screen.height * 0.026f);
+        center.fontSize = Mathf.RoundToInt(Screen.height * 0.026f * s);
         center.alignment = TextAnchor.MiddleCenter;
         center.wordWrap = true;
         center.normal.textColor = Color.white;
 
         title = new GUIStyle(center);
-        title.fontSize = Mathf.RoundToInt(Screen.height * 0.052f);
+        title.fontSize = Mathf.RoundToInt(Screen.height * 0.052f * s);
         title.normal.textColor = new Color(0.90f, 0.96f, 0.92f);
 
         endStyle = new GUIStyle(center);
-        endStyle.fontSize = Mathf.RoundToInt(Screen.height * 0.021f);
+        endStyle.fontSize = Mathf.RoundToInt(Screen.height * 0.021f * s);
         endStyle.normal.textColor = new Color(0.80f, 0.86f, 0.82f);
 
         callName = new GUIStyle(center);
-        callName.fontSize = Mathf.RoundToInt(Screen.height * 0.019f);
+        callName.fontSize = Mathf.RoundToInt(Screen.height * 0.019f * s);
         callName.alignment = TextAnchor.MiddleLeft;
         callName.normal.textColor = new Color(1f, 0.76f, 0.29f);
 
         callLine = new GUIStyle(center);
-        callLine.fontSize = Mathf.RoundToInt(Screen.height * 0.021f);
+        callLine.fontSize = Mathf.RoundToInt(Screen.height * 0.021f * s);
         callLine.alignment = TextAnchor.MiddleLeft;
         callLine.normal.textColor = new Color(0.90f, 0.93f, 0.90f);
 
         callInput = new GUIStyle(center);
-        callInput.fontSize = Mathf.RoundToInt(Screen.height * 0.021f);
+        callInput.fontSize = Mathf.RoundToInt(Screen.height * 0.021f * s);
         callInput.alignment = TextAnchor.MiddleLeft;
         callInput.normal.textColor = Color.white;
 
         hintStyle = new GUIStyle(center);
-        hintStyle.fontSize = Mathf.RoundToInt(Screen.height * 0.017f);
+        hintStyle.fontSize = Mathf.RoundToInt(Screen.height * 0.017f * s);
         hintStyle.normal.textColor = new Color(0.62f, 0.66f, 0.63f, 0.85f);
 
         subtitleStyle = new GUIStyle(center);
-        subtitleStyle.fontSize = Mathf.RoundToInt(Screen.height * 0.022f);
+        subtitleStyle.fontSize = Mathf.RoundToInt(Screen.height * 0.022f * s);
         subtitleStyle.normal.textColor = new Color(0.92f, 0.95f, 0.92f);
 
         actionGray = new GUIStyle(center);
         // Подпись действия читается поверх мира с рабочего места — крупнее прочего текста.
-        actionGray.fontSize = Mathf.RoundToInt(Screen.height * 0.036f);
+        actionGray.fontSize = Mathf.RoundToInt(Screen.height * 0.036f * s);
         actionGray.alignment = TextAnchor.MiddleLeft;
         actionGray.wordWrap = false;
         actionGray.normal.textColor = new Color(0.55f, 0.57f, 0.55f, 0.95f);
@@ -95,6 +98,19 @@ public class OverlayUI : MonoBehaviour
 
         actionError = new GUIStyle(actionGray);
         actionError.normal.textColor = new Color(1f, 0.36f, 0.36f, 0.95f);
+
+        settingsTitle = new GUIStyle(center);
+        settingsTitle.fontSize = Mathf.RoundToInt(Screen.height * 0.034f * s);
+        settingsTitle.wordWrap = false;
+        settingsTitle.normal.textColor = new Color(0.88f, 0.95f, 0.90f);
+
+        settingsOption = new GUIStyle(center);
+        settingsOption.fontSize = Mathf.RoundToInt(Screen.height * 0.027f * s);
+        settingsOption.wordWrap = false;
+        settingsOption.normal.textColor = new Color(0.62f, 0.68f, 0.64f);
+
+        settingsValue = new GUIStyle(settingsOption);
+        settingsValue.normal.textColor = new Color(1f, 0.76f, 0.29f);
     }
 
     void OnGUI()
@@ -136,12 +152,16 @@ public class OverlayUI : MonoBehaviour
             DrawCall(w, h);
         else if (dir.Modal == ModalKind.Death || dir.Modal == ModalKind.End)
             DrawEnd(w, h);
+        else if (dir.Modal == ModalKind.Settings)
+            DrawSettings(w, h);
+
+        float s = dir.UiScale;
 
         if ((dir.Modal == ModalKind.None || dir.Modal == ModalKind.Dictaphone)
             && !string.IsNullOrEmpty(dir.Subtitle))
         {
-            Rect band = new Rect(w * 0.5f - Mathf.Min(460f, w * 0.44f), h - h * 0.16f,
-                                 Mathf.Min(920f, w * 0.88f), h * 0.10f);
+            Rect band = new Rect(w * 0.5f - Mathf.Min(460f * s, w * 0.44f), h - h * 0.16f * s,
+                                 Mathf.Min(920f * s, w * 0.88f), h * 0.10f * s);
             DrawBand(band, 0.62f);
             GUI.Label(band, dir.Subtitle, subtitleStyle);
         }
@@ -149,14 +169,14 @@ public class OverlayUI : MonoBehaviour
         if (dir.Modal == ModalKind.None && dir.Running && !dir.ActionVisible &&
             !string.IsNullOrEmpty(dir.Hint))
         {
-            var r = new Rect(0f, h - h * 0.035f, w, h * 0.03f);
+            var r = new Rect(0f, h - h * 0.035f * s, w, h * 0.03f * s);
             GUI.Label(r, dir.Hint, hintStyle);
         }
     }
 
     void DrawCrosshair(float w, float h)
     {
-        float s = Mathf.Max(3f, Mathf.Round(h * 0.0035f));
+        float s = Mathf.Max(3f, Mathf.Round(h * 0.0035f * dir.UiScale));
         float x = w * 0.5f - s * 0.5f;
         float y = h * 0.5f - s * 0.5f;
 
@@ -219,43 +239,48 @@ public class OverlayUI : MonoBehaviour
 
     void DrawRest(float w, float h)
     {
+        float s = dir.UiScale;
         float a = 0.75f * dir.RestProgress;
         GUI.color = new Color(0f, 0f, 0f, a);
         GUI.DrawTexture(new Rect(0f, 0f, w, h), white);
         GUI.color = Color.white;
 
-        GUI.Label(new Rect(0f, h * 0.44f, w, h * 0.05f), "ОТДЫХ", title);
-        GUI.Label(new Rect(0f, h * 0.52f, w, h * 0.05f),
+        GUI.Label(new Rect(0f, h * (0.5f - 0.06f * s), w, h * 0.05f * s), "ОТДЫХ", title);
+        GUI.Label(new Rect(0f, h * (0.5f + 0.02f * s), w, h * 0.05f * s),
             Mathf.RoundToInt(dir.RestProgress * 100f) + "%", center);
     }
 
     void DrawCall(float w, float h)
     {
-        float bw = Mathf.Min(900f, w * 0.9f);
-        var band = new Rect(w * 0.5f - bw * 0.5f, h - h * 0.34f, bw, h * 0.26f);
+        float s = dir.UiScale;
+
+        float bw = Mathf.Min(900f * s, w * 0.92f);
+        float bh = Mathf.Min(h * 0.26f * s, h * 0.60f);
+        var band = new Rect(w * 0.5f - bw * 0.5f, h - h * 0.08f - bh, bw, bh);
         DrawBand(band, 0.82f);
 
-        var nameR = new Rect(band.x + 24f, band.y + 14f, band.width - 48f, 30f);
+        var nameR = new Rect(band.x + 24f * s, band.y + 14f * s, band.width - 48f * s, 30f * s);
         GUI.Label(nameR, "ТЕЛЕФОН · ВИКТОР", callName);
 
-        var lineR = new Rect(band.x + 24f, band.y + 48f, band.width - 48f, 54f);
+        var lineR = new Rect(band.x + 24f * s, band.y + 48f * s, band.width - 48f * s, 54f * s);
         GUI.Label(lineR, dir.CallLine, callLine);
 
         if (dir.CallAwaitingAnswer)
         {
             string shown = "ОТВЕТ: " + dir.CallAnswer +
                            (dir.CallTypo ? " ▌" : (Time.time % 1f < 0.55f ? "_" : " "));
-            var inR = new Rect(band.x + 24f, band.y + 104f, band.width - 48f, 34f);
+            var inR = new Rect(band.x + 24f * s, band.y + 104f * s, band.width - 48f * s, 34f * s);
             GUI.Label(inR, shown, dir.CallTypo
                 ? Tinted(callInput, new Color(1f, 0.36f, 0.36f))
                 : callInput);
 
-            GUI.Label(new Rect(band.x + 24f, band.y + band.height - 38f, band.width - 48f, 28f),
+            GUI.Label(new Rect(band.x + 24f * s, band.y + band.height - 38f * s,
+                               band.width - 48f * s, 28f * s),
                       "ENTER — сказать", hintStyle);
         }
         else
         {
-            GUI.Label(new Rect(band.x + 24f, band.y + 110f, band.width - 48f, 34f),
+            GUI.Label(new Rect(band.x + 24f * s, band.y + 110f * s, band.width - 48f * s, 34f * s),
                       "…", callLine);
         }
     }
@@ -265,6 +290,89 @@ public class OverlayUI : MonoBehaviour
         var s = new GUIStyle(src);
         s.normal.textColor = c;
         return s;
+    }
+
+    void DrawSettings(float w, float h)
+    {
+        float s = dir.UiScale;
+        float pad = 26f * s;
+        float gap = 8f * s;
+
+        // Габариты вариантов считаем заранее, чтобы панель была по содержимому,
+        // а не растянутой на пол-экрана.
+        int n = NightDirector.UiScaleSteps.Length;
+        var widths = new float[n];
+        var labels = new string[n];
+        float cardsW = 0f;
+        float cardH = settingsOption.lineHeight + 16f * s;
+
+        for (int i = 0; i < n; i++)
+        {
+            labels[i] = Mathf.RoundToInt(NightDirector.UiScaleSteps[i] * 100f) + "%";
+            widths[i] = Mathf.Max(cardH * 1.7f,
+                settingsOption.CalcSize(new GUIContent(labels[i])).x + 22f * s);
+            cardsW += widths[i];
+        }
+        cardsW += gap * (n - 1);
+
+        float titleH = settingsTitle.lineHeight;
+        float hintH = hintStyle.lineHeight;
+        float contentH = titleH + 8f * s + Mathf.Max(1f, s) + 18f * s
+                       + hintH + 12f * s + cardH + 20f * s + hintH;
+
+        float pw = Mathf.Clamp(cardsW + pad * 2f + 24f * s,
+                               360f * s, Mathf.Min(760f * s, w * 0.9f));
+        float ph = Mathf.Min(contentH + pad * 2f + hintH + 16f * s, h * 0.82f);
+        var panel = new Rect((w - pw) * 0.5f, (h - ph) * 0.5f, pw, ph);
+
+        DrawSolid(new Rect(0f, 0f, w, h), new Color(0f, 0f, 0f, 0.90f));
+        DrawSolid(panel, new Color(0.045f, 0.06f, 0.052f, 0.96f));
+        DrawBorder(panel, Mathf.Max(1f, 1.5f * s), new Color(0.28f, 0.38f, 0.32f, 0.85f));
+
+        float y = panel.y + pad;
+
+        GUI.Label(new Rect(panel.x + pad, y, pw - 2f * pad, titleH),
+                  "НАСТРОЙКИ", settingsTitle);
+        y += titleH + 8f * s;
+
+        DrawSolid(new Rect(panel.x + pad, y, pw - 2f * pad, Mathf.Max(1f, s)),
+                  new Color(1f, 1f, 1f, 0.10f));
+        y += 18f * s;
+
+        GUI.Label(new Rect(panel.x + pad, y, pw - 2f * pad, hintH),
+                  "РАЗМЕР ТЕКСТА", hintStyle);
+        y += hintH + 12f * s;
+
+        float x = panel.x + (pw - cardsW) * 0.5f;
+        for (int i = 0; i < n; i++)
+        {
+            var r = new Rect(x, y, widths[i], cardH);
+            bool sel = i == dir.UiScaleIndex;
+            bool hover = r.Contains(Event.current.mousePosition);
+
+            if (sel) DrawSolid(r, new Color(1f, 0.76f, 0.29f, 0.14f));
+            else if (hover) DrawSolid(r, new Color(1f, 1f, 1f, 0.05f));
+
+            DrawBorder(r, Mathf.Max(1f, s), sel
+                ? new Color(1f, 0.76f, 0.29f, 0.85f)
+                : new Color(1f, 1f, 1f, hover ? 0.24f : 0.10f));
+
+            GUI.Label(r, labels[i], sel ? settingsValue : settingsOption);
+
+            // Курсор в меню свободен — вариант можно выбрать и мышью.
+            if (GUI.Button(r, GUIContent.none, GUIStyle.none))
+                dir.SetUiScale(i);
+
+            x += widths[i] + gap;
+        }
+        y += cardH + 20f * s;
+
+        GUI.Label(new Rect(panel.x + pad, y, pw - 2f * pad, hintH),
+                  "Сейчас: " + Mathf.RoundToInt(dir.UiScale * 100f) + " %", hintStyle);
+
+        GUI.Label(new Rect(panel.x + pad, panel.yMax - pad - hintH,
+                           pw - 2f * pad, hintH),
+                  "← → или мышь   ·   ESC — закрыть", hintStyle);
     }
 
     void DrawEnd(float w, float h)
@@ -284,8 +392,21 @@ public class OverlayUI : MonoBehaviour
 
     void DrawBand(Rect r, float alpha)
     {
-        GUI.color = new Color(0f, 0f, 0f, alpha);
+        DrawSolid(r, new Color(0f, 0f, 0f, alpha));
+    }
+
+    void DrawSolid(Rect r, Color c)
+    {
+        GUI.color = c;
         GUI.DrawTexture(r, white);
         GUI.color = Color.white;
+    }
+
+    void DrawBorder(Rect r, float t, Color c)
+    {
+        DrawSolid(new Rect(r.x, r.y, r.width, t), c);
+        DrawSolid(new Rect(r.x, r.yMax - t, r.width, t), c);
+        DrawSolid(new Rect(r.x, r.y, t, r.height), c);
+        DrawSolid(new Rect(r.xMax - t, r.y, t, r.height), c);
     }
 }

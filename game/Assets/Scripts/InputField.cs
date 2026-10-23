@@ -22,6 +22,8 @@ public class InputField
         {
             char c = typed[i];
             if (c == '\b' || c == '\n' || c == '\r' || char.IsControl(c)) continue;
+            // E, забранная приближением монитора, не должна печататься в строке.
+            if ((c == 'e' || c == 'E') && PlayerController.ConsumeFocusKeyChar(c)) continue;
             if (UnityEngine.Random.value < chance)
             {
                 lastReject = Time.time;

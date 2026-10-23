@@ -51,6 +51,8 @@ public class ActionSystem : MonoBehaviour
             // цифры и знаки не участвуют в подписи: за столом 1/2 — таблетка
             // и диктофон, их нельзя превращать в «неверную букву»
             if (!char.IsLetter(c)) continue;
+            // Z, забранная зумом камеры, не должна мигать как ошибка
+            if ((c == 'z' || c == 'Z') && PlayerController.ConsumeZoomKeyChar(c)) continue;
 
             char expected = ExpectedChar(target.Prompt, typed.Count);
             if (expected == '\0') break;

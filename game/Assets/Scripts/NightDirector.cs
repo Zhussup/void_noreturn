@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-public enum ModalKind { None, Intro, Call, Dictaphone, Rest, Death, End }
+public enum ModalKind { None, Intro, Call, Dictaphone, Rest, Death, End, Settings }
 
 /// <summary>
 /// Ночь 1 «Смена»: часы, события, звонок шефа, тревога, бессонница,
@@ -29,6 +29,23 @@ public class NightDirector : MonoBehaviour
     public bool Running;
     public bool ModalActive => modal != ModalKind.None;
     public ModalKind Modal => modal;
+
+    // ------------------------------------------------------------ интерфейс
+
+    /// <summary>Варианты размера текста: HUD и надписи на мониторах.</summary>
+    public static readonly float[] UiScaleSteps = { 1.0f, 1.1f, 1.2f, 1.35f, 1.5f };
+    const string UiScalePref = "vnr.uiScaleIndex";
+
+    /// <summary>Выбранный шаг размера; по умолчанию чуть крупнее базового.</summary>
+    public int UiScaleIndex { get; private set; } = 2;
+    public float UiScale =>
+        UiScaleSteps[Mathf.Clamp(UiScaleIndex, 0, UiScaleSteps.Length - 1)];
+
+    /// <summary>Приложение принимает текст: E отдаётся ему, а не приближению монитора.</summary>
+    public bool TextInputActive =>
+        ModalActive ||
+        (ActiveStation == StationTerminal && terminal != null && terminal.CapturingInput) ||
+        (ActiveStation == StationMessenger && messenger != null && messenger.CapturingInput);
 
     // прицел и система действий
     public bool ActionVisible => action != null && action.HasTarget
@@ -67,12 +84,14 @@ public class NightDirector : MonoBehaviour
     ModalKind modal = ModalKind.Intro;
     float introStart;
     const float IntroDuration = 2.8f;
+    bool settingsPrevInput;
 
     TerminalApp terminal;
     MessengerApp messenger;
     ActionSystem action;
     Interactable phoneInteractable;
     ScreenSurface terminalSurface, messengerSurface, laptopSurface;
+    List<ScreenLine> laptopLines;
 
     float flashUntil;
     float subtitleUntil;
@@ -92,6 +111,10 @@ public class NightDirector : MonoBehaviour
     float dictStart;
     float restStart = -1f;
     const float RestSeconds = 3.5f;
+
+    // Звонок шефа через несколько секунд после входа в терминал; < 0 — не запланирован.
+    float callDelay = -1f;
+    const float CallDelayAfterLogin = 3f;
 
     float cyberCd = 300f;
     int lastMinute = -1;
@@ -115,6 +138,9 @@ public class NightDirector : MonoBehaviour
 
         Player = FindAnyObjectByType<PlayerController>();
         UiFont = MakeFont();
+
+        UiScaleIndex = Mathf.Clamp(PlayerPrefs.GetInt(UiScalePref, UiScaleIndex),
+                                   0, UiScaleSteps.Length - 1);
 
         if (Player != null)
         {
@@ -163,20 +189,35 @@ public class NightDirector : MonoBehaviour
         if (laptop != null)
         {
             laptopSurface = ScreenSurface.Create(laptop, UiFont, 0.00064f, 0.0115f);
-            var ll = new List<ScreenLine>
+            laptopLines = new List<ScreenLine>
             {
                 new ScreenLine("", Color.white),
                 new ScreenLine("  GANDEX-OS", new Color(0.30f, 0.70f, 0.62f)),
                 new ScreenLine("  локальная машина", new Color(0.12f, 0.28f, 0.26f)),
                 new ScreenLine("  экран заблокирован", new Color(0.12f, 0.28f, 0.26f)),
             };
-            laptopSurface.Set(ll);
+            laptopSurface.Set(laptopLines);
         }
 
         if (terminalSurface != null)
             terminal = new TerminalApp(this, terminalSurface);
         if (messengerSurface != null)
             messenger = new MessengerApp(this, messengerSurface);
+
+        ApplyTextScale();
+    }
+
+    /// <summary>Размер текста на физических экранах следует за настройкой HUD.</summary>
+    void ApplyTextScale()
+    {
+        if (terminalSurface != null) terminalSurface.SetScale(UiScale);
+        if (messengerSurface != null) messengerSurface.SetScale(UiScale);
+        if (laptopSurface != null)
+        {
+            laptopSurface.SetScale(UiScale);
+            // Экран ноутбука статичный: после пересборки возвращаем его надпись.
+            if (laptopLines != null) laptopSurface.Set(laptopLines);
+        }
     }
 
     static Transform FindScreen(string monitorName)
@@ -245,7 +286,8 @@ public class NightDirector : MonoBehaviour
         events.Add(new Evt(140, () => AddChat(ChatChannel.Team, "КУПЛИНОВ",
             "Кто-нибудь, выключите уведомления. Ночью спать надо.", Clock.Display)));
 
-        events.Add(new Evt(180, StartRinging)); // ~03:00 — звонок шефа
+        // Звонок шефа больше не привязан к часам: он идёт через три секунды
+        // после того, как игрок войдёт в терминал (см. OnLogin).
 
         events.Add(new Evt(252, () => // 04:12 — чужая строка в чате и провал
         {
@@ -376,7 +418,12 @@ public class NightDirector : MonoBehaviour
 
     void Update()
     {
-        if (Player != null) ActiveStation = Player.Current;
+        if (Player != null)
+        {
+            ActiveStation = Player.Current;
+            Player.TextInputActive = TextInputActive;
+            if (!Running || ModalActive) Player.ClearFocus();
+        }
 
         if (modal == ModalKind.Intro)
         {
@@ -404,20 +451,34 @@ public class NightDirector : MonoBehaviour
             return;
         }
 
-        bool timeRuns = Running && modal != ModalKind.Death && modal != ModalKind.End;
+        // ESC — пауза с настройками; в приближении монитора ESC сначала
+        // закрывает его (это уже сделал PlayerController).
+        if (Input.GetKeyDown(KeyCode.Escape) &&
+            (Player == null || !Player.EscapeClearedFocus))
+        {
+            if (modal == ModalKind.Settings) CloseSettings();
+            else if (modal == ModalKind.None && Running) OpenSettings();
+        }
+        if (modal == ModalKind.Settings)
+        {
+            ringUntil += Time.deltaTime; // пауза не должна съедать время звонка
+            HandleSettingsInput();
+        }
+
+        bool timeRuns = Running && modal != ModalKind.Death &&
+                        modal != ModalKind.End && modal != ModalKind.Settings;
         if (timeRuns)
         {
             Clock.Tick(Time.deltaTime);
             TickCyberbez(Time.deltaTime);
             TickEvents();
             TickAnxiety(Time.deltaTime);
+            TickCallDelay(Time.deltaTime);
         }
 
         if (Player != null)
             Player.lookEnabled = Running &&
                                  (modal == ModalKind.None || modal == ModalKind.Call);
-
-        HandleDebugCall();
 
         // телефон обрабатываем раньше действий: в кадре PICK UP не должен
         // попасть в поле ответа на звонок
@@ -447,6 +508,60 @@ public class NightDirector : MonoBehaviour
         UpdatePhoneLed();
         UpdateHint();
         UpdateVisuals();
+    }
+
+    // ------------------------------------------------------------ настройки
+
+    /// <summary>Выбрать шаг размера интерфейса (клик по варианту в меню).</summary>
+    public void SetUiScale(int index)
+    {
+        int next = Mathf.Clamp(index, 0, UiScaleSteps.Length - 1);
+        if (next == UiScaleIndex) return;
+
+        UiScaleIndex = next;
+        PlayerPrefs.SetInt(UiScalePref, UiScaleIndex);
+        PlayerPrefs.Save();
+        ApplyTextScale(); // текст на мониторах перестраивается сразу
+    }
+
+    void OpenSettings()
+    {
+        settingsPrevInput = Player != null && Player.inputEnabled;
+        modal = ModalKind.Settings;
+        if (Player == null) return;
+        Player.inputEnabled = false;   // станции и действия ждут
+        Player.SetCursorLocked(false); // курсор нужен, чтобы выйти из окна
+    }
+
+    void CloseSettings()
+    {
+        modal = ModalKind.None;
+        if (Player == null) return;
+        Player.inputEnabled = settingsPrevInput;
+        Player.SetCursorLocked(true);
+    }
+
+    void HandleSettingsInput()
+    {
+        if (Input.GetKeyDown(KeyCode.LeftArrow)) AdjustUiScale(-1);
+        if (Input.GetKeyDown(KeyCode.RightArrow)) AdjustUiScale(1);
+    }
+
+    void AdjustUiScale(int delta)
+    {
+        SetUiScale(UiScaleIndex + delta);
+    }
+
+    /// <summary>Отсчёт до звонка шефа после успешного входа в терминал.</summary>
+    void TickCallDelay(float dt)
+    {
+        if (callDelay < 0f) return;
+
+        callDelay -= dt;
+        if (callDelay > 0f) return;
+
+        callDelay = -1f;
+        StartRinging();
     }
 
     void TickEvents()
@@ -528,6 +643,18 @@ public class NightDirector : MonoBehaviour
                 Hint = "E (удерживать) — отдых   ·   TAB — экран   ·   мышь — обзор";
                 break;
         }
+
+        if (Player != null)
+        {
+            if (Player.MonitorFocused)
+                Hint = TextInputActive
+                    ? "ESC — вернуться к комнате"
+                    : "E — вернуться к комнате";
+            else if (Player.CanFocusMonitor)
+                Hint += "   ·   E — приблизить";
+            else if (!TextInputActive)
+                Hint += "   ·   Z — зум";
+        }
     }
 
     void UpdateClockVisual()
@@ -564,13 +691,6 @@ public class NightDirector : MonoBehaviour
     }
 
     // ------------------------------------------------------------ действия
-
-    /// <summary>P — тестовый звонок на стационарный телефон.</summary>
-    void HandleDebugCall()
-    {
-        if (!Running || modal != ModalKind.None) return;
-        if (Input.GetKeyDown(KeyCode.P)) StartRinging();
-    }
 
     void UpdateActionPrompt()
     {
@@ -632,6 +752,7 @@ public class NightDirector : MonoBehaviour
     void TickPhone()
     {
         if (!Running && modal != ModalKind.Call) return;
+        if (modal == ModalKind.Settings) return; // пауза не «съедает» звонок
 
         if (phone == PhoneState.Ringing && Time.time > ringUntil)
         {
@@ -799,6 +920,7 @@ public class NightDirector : MonoBehaviour
     public void OnLogin()
     {
         MoodPending = true;
+        callDelay = CallDelayAfterLogin; // терминал открыт — через 3 с звонит шеф
         AddChat(ChatChannel.Harmony, "ГАРМОНИЯ",
             "Здравствуйте, Брик. Оцените настроение от 1 до 10.", Clock.Display);
         ShowSubtitle("Смена открыта. Проверьте мессенджер.", 3f);
