@@ -415,6 +415,20 @@ namespace VOID.EnvModels
 
         // ------------------------------------------------------------ префабы
 
+        /// <summary>
+        /// Создаёт пустой префаб-корень PRB_*, если его ещё нет (для реквизита,
+        /// которого не было в greybox). collider — добавить BoxCollider на корень.
+        /// </summary>
+        public static void EnsurePrefab(string prefabName, bool collider)
+        {
+            string path = PrefabsDir + "/" + prefabName + ".prefab";
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(path) != null) return;
+            var root = new GameObject(prefabName);
+            if (collider) root.AddComponent<BoxCollider>();
+            PrefabUtility.SaveAsPrefabAsset(root, path);
+            Object.DestroyImmediate(root);
+        }
+
         /// <summary>Открывает префаб, отдаёт корень в правку и сохраняет.</summary>
         public static void EditPrefab(string prefabName, System.Action<GameObject> edit)
         {
