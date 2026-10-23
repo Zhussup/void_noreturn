@@ -111,6 +111,10 @@ public class NightDirector : MonoBehaviour
     float restStart = -1f;
     const float RestSeconds = 3.5f;
 
+    // Звонок шефа через несколько секунд после входа в терминал; < 0 — не запланирован.
+    float callDelay = -1f;
+    const float CallDelayAfterLogin = 3f;
+
     float cyberCd = 300f;
     int lastMinute = -1;
 
@@ -266,7 +270,8 @@ public class NightDirector : MonoBehaviour
         events.Add(new Evt(140, () => AddChat(ChatChannel.Team, "КУПЛИНОВ",
             "Кто-нибудь, выключите уведомления. Ночью спать надо.", Clock.Display)));
 
-        events.Add(new Evt(180, StartRinging)); // ~03:00 — звонок шефа
+        // Звонок шефа больше не привязан к часам: он идёт через три секунды
+        // после того, как игрок войдёт в терминал (см. OnLogin).
 
         events.Add(new Evt(252, () => // 04:12 — чужая строка в чате и провал
         {
@@ -452,13 +457,12 @@ public class NightDirector : MonoBehaviour
             TickCyberbez(Time.deltaTime);
             TickEvents();
             TickAnxiety(Time.deltaTime);
+            TickCallDelay(Time.deltaTime);
         }
 
         if (Player != null)
             Player.lookEnabled = Running &&
                                  (modal == ModalKind.None || modal == ModalKind.Call);
-
-        HandleDebugCall();
 
         // телефон обрабатываем раньше действий: в кадре PICK UP не должен
         // попасть в поле ответа на звонок
@@ -492,6 +496,17 @@ public class NightDirector : MonoBehaviour
 
     // ------------------------------------------------------------ настройки
 
+    /// <summary>Выбрать шаг размера интерфейса (клик по варианту в меню).</summary>
+    public void SetUiScale(int index)
+    {
+        int next = Mathf.Clamp(index, 0, UiScaleSteps.Length - 1);
+        if (next == UiScaleIndex) return;
+
+        UiScaleIndex = next;
+        PlayerPrefs.SetInt(UiScalePref, UiScaleIndex);
+        PlayerPrefs.Save();
+    }
+
     void OpenSettings()
     {
         settingsPrevInput = Player != null && Player.inputEnabled;
@@ -517,12 +532,19 @@ public class NightDirector : MonoBehaviour
 
     void AdjustUiScale(int delta)
     {
-        int next = Mathf.Clamp(UiScaleIndex + delta, 0, UiScaleSteps.Length - 1);
-        if (next == UiScaleIndex) return;
+        SetUiScale(UiScaleIndex + delta);
+    }
 
-        UiScaleIndex = next;
-        PlayerPrefs.SetInt(UiScalePref, UiScaleIndex);
-        PlayerPrefs.Save();
+    /// <summary>Отсчёт до звонка шефа после успешного входа в терминал.</summary>
+    void TickCallDelay(float dt)
+    {
+        if (callDelay < 0f) return;
+
+        callDelay -= dt;
+        if (callDelay > 0f) return;
+
+        callDelay = -1f;
+        StartRinging();
     }
 
     void TickEvents()
@@ -652,13 +674,6 @@ public class NightDirector : MonoBehaviour
     }
 
     // ------------------------------------------------------------ действия
-
-    /// <summary>P — тестовый звонок на стационарный телефон.</summary>
-    void HandleDebugCall()
-    {
-        if (!Running || modal != ModalKind.None) return;
-        if (Input.GetKeyDown(KeyCode.P)) StartRinging();
-    }
 
     void UpdateActionPrompt()
     {
@@ -888,6 +903,7 @@ public class NightDirector : MonoBehaviour
     public void OnLogin()
     {
         MoodPending = true;
+        callDelay = CallDelayAfterLogin; // терминал открыт — через 3 с звонит шеф
         AddChat(ChatChannel.Harmony, "ГАРМОНИЯ",
             "Здравствуйте, Брик. Оцените настроение от 1 до 10.", Clock.Display);
         ShowSubtitle("Смена открыта. Проверьте мессенджер.", 3f);

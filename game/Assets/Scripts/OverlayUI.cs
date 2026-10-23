@@ -14,7 +14,7 @@ public class OverlayUI : MonoBehaviour
     Texture2D white;
 
     GUIStyle center, title, endStyle, callName, callLine, callInput, hintStyle, subtitleStyle;
-    GUIStyle actionGray, actionTyped, actionError, settingsValue;
+    GUIStyle actionGray, actionTyped, actionError, settingsTitle, settingsOption, settingsValue;
     float styledScale = -1f;
 
     public void Init(NightDirector director, Font uiFont)
@@ -99,8 +99,17 @@ public class OverlayUI : MonoBehaviour
         actionError = new GUIStyle(actionGray);
         actionError.normal.textColor = new Color(1f, 0.36f, 0.36f, 0.95f);
 
-        settingsValue = new GUIStyle(center);
-        settingsValue.fontSize = Mathf.RoundToInt(Screen.height * 0.032f * s);
+        settingsTitle = new GUIStyle(center);
+        settingsTitle.fontSize = Mathf.RoundToInt(Screen.height * 0.034f * s);
+        settingsTitle.wordWrap = false;
+        settingsTitle.normal.textColor = new Color(0.88f, 0.95f, 0.90f);
+
+        settingsOption = new GUIStyle(center);
+        settingsOption.fontSize = Mathf.RoundToInt(Screen.height * 0.027f * s);
+        settingsOption.wordWrap = false;
+        settingsOption.normal.textColor = new Color(0.62f, 0.68f, 0.64f);
+
+        settingsValue = new GUIStyle(settingsOption);
         settingsValue.normal.textColor = new Color(1f, 0.76f, 0.29f);
     }
 
@@ -286,25 +295,84 @@ public class OverlayUI : MonoBehaviour
     void DrawSettings(float w, float h)
     {
         float s = dir.UiScale;
+        float pad = 26f * s;
+        float gap = 8f * s;
 
-        GUI.color = new Color(0f, 0f, 0f, 0.92f);
-        GUI.DrawTexture(new Rect(0f, 0f, w, h), white);
-        GUI.color = Color.white;
+        // Габариты вариантов считаем заранее, чтобы панель была по содержимому,
+        // а не растянутой на пол-экрана.
+        int n = NightDirector.UiScaleSteps.Length;
+        var widths = new float[n];
+        var labels = new string[n];
+        float cardsW = 0f;
+        float cardH = settingsOption.lineHeight + 16f * s;
 
-        GUI.Label(new Rect(0f, h * (0.5f - 0.24f * s), w, h * 0.12f * s), "НАСТРОЙКИ", title);
-        GUI.Label(new Rect(0f, h * (0.5f - 0.03f * s), w, h * 0.05f * s),
-                  "РАЗМЕР ИНТЕРФЕЙСА", hintStyle);
-
-        string row = "";
-        for (int i = 0; i < NightDirector.UiScaleSteps.Length; i++)
+        for (int i = 0; i < n; i++)
         {
-            if (i > 0) row += "    ";
-            int pct = Mathf.RoundToInt(NightDirector.UiScaleSteps[i] * 100f);
-            row += i == dir.UiScaleIndex ? "[" + pct + "%]" : " " + pct + "% ";
+            labels[i] = Mathf.RoundToInt(NightDirector.UiScaleSteps[i] * 100f) + "%";
+            widths[i] = Mathf.Max(cardH * 1.7f,
+                settingsOption.CalcSize(new GUIContent(labels[i])).x + 22f * s);
+            cardsW += widths[i];
         }
-        GUI.Label(new Rect(0f, h * (0.5f + 0.04f * s), w, h * 0.08f * s), row, settingsValue);
-        GUI.Label(new Rect(0f, h * (0.5f + 0.16f * s), w, h * 0.05f * s),
-                  "← →  изменить   ·   ESC  закрыть", hintStyle);
+        cardsW += gap * (n - 1);
+
+        float titleH = settingsTitle.lineHeight;
+        float hintH = hintStyle.lineHeight;
+        float contentH = titleH + 8f * s + Mathf.Max(1f, s) + 18f * s
+                       + hintH + 12f * s + cardH + 20f * s + hintH;
+
+        float pw = Mathf.Clamp(cardsW + pad * 2f + 24f * s,
+                               360f * s, Mathf.Min(760f * s, w * 0.9f));
+        float ph = Mathf.Min(contentH + pad * 2f + hintH + 16f * s, h * 0.82f);
+        var panel = new Rect((w - pw) * 0.5f, (h - ph) * 0.5f, pw, ph);
+
+        DrawSolid(new Rect(0f, 0f, w, h), new Color(0f, 0f, 0f, 0.90f));
+        DrawSolid(panel, new Color(0.045f, 0.06f, 0.052f, 0.96f));
+        DrawBorder(panel, Mathf.Max(1f, 1.5f * s), new Color(0.28f, 0.38f, 0.32f, 0.85f));
+
+        float y = panel.y + pad;
+
+        GUI.Label(new Rect(panel.x + pad, y, pw - 2f * pad, titleH),
+                  "НАСТРОЙКИ", settingsTitle);
+        y += titleH + 8f * s;
+
+        DrawSolid(new Rect(panel.x + pad, y, pw - 2f * pad, Mathf.Max(1f, s)),
+                  new Color(1f, 1f, 1f, 0.10f));
+        y += 18f * s;
+
+        GUI.Label(new Rect(panel.x + pad, y, pw - 2f * pad, hintH),
+                  "РАЗМЕР ИНТЕРФЕЙСА", hintStyle);
+        y += hintH + 12f * s;
+
+        float x = panel.x + (pw - cardsW) * 0.5f;
+        for (int i = 0; i < n; i++)
+        {
+            var r = new Rect(x, y, widths[i], cardH);
+            bool sel = i == dir.UiScaleIndex;
+            bool hover = r.Contains(Event.current.mousePosition);
+
+            if (sel) DrawSolid(r, new Color(1f, 0.76f, 0.29f, 0.14f));
+            else if (hover) DrawSolid(r, new Color(1f, 1f, 1f, 0.05f));
+
+            DrawBorder(r, Mathf.Max(1f, s), sel
+                ? new Color(1f, 0.76f, 0.29f, 0.85f)
+                : new Color(1f, 1f, 1f, hover ? 0.24f : 0.10f));
+
+            GUI.Label(r, labels[i], sel ? settingsValue : settingsOption);
+
+            // Курсор в меню свободен — вариант можно выбрать и мышью.
+            if (GUI.Button(r, GUIContent.none, GUIStyle.none))
+                dir.SetUiScale(i);
+
+            x += widths[i] + gap;
+        }
+        y += cardH + 20f * s;
+
+        GUI.Label(new Rect(panel.x + pad, y, pw - 2f * pad, hintH),
+                  "Сейчас: " + Mathf.RoundToInt(dir.UiScale * 100f) + " %", hintStyle);
+
+        GUI.Label(new Rect(panel.x + pad, panel.yMax - pad - hintH,
+                           pw - 2f * pad, hintH),
+                  "← → или мышь   ·   ESC — закрыть", hintStyle);
     }
 
     void DrawEnd(float w, float h)
@@ -324,8 +392,21 @@ public class OverlayUI : MonoBehaviour
 
     void DrawBand(Rect r, float alpha)
     {
-        GUI.color = new Color(0f, 0f, 0f, alpha);
+        DrawSolid(r, new Color(0f, 0f, 0f, alpha));
+    }
+
+    void DrawSolid(Rect r, Color c)
+    {
+        GUI.color = c;
         GUI.DrawTexture(r, white);
         GUI.color = Color.white;
+    }
+
+    void DrawBorder(Rect r, float t, Color c)
+    {
+        DrawSolid(new Rect(r.x, r.y, r.width, t), c);
+        DrawSolid(new Rect(r.x, r.yMax - t, r.width, t), c);
+        DrawSolid(new Rect(r.x, r.y, t, r.height), c);
+        DrawSolid(new Rect(r.xMax - t, r.y, t, r.height), c);
     }
 }
