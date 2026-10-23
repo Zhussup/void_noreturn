@@ -387,6 +387,32 @@ namespace VOID.EnvModels
             return m;
         }
 
+        /// <summary>
+        /// MAT_Glass — прозрачный Standard (режим Transparent) для стёкол окна
+        /// и стакана. Создаётся при первом вызове.
+        /// </summary>
+        public static Material GlassMat()
+        {
+            string path = MaterialsDir + "/MAT_Glass.mat";
+            var m = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (m != null) return m;
+
+            m = new Material(Shader.Find("Standard")) { name = "MAT_Glass" };
+            m.SetColor("_Color", new Color(0.78f, 0.86f, 0.9f, 0.16f));
+            m.SetFloat("_Glossiness", 0.95f);
+            m.SetFloat("_Metallic", 0f);
+            m.SetFloat("_Mode", 3f);
+            m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.One);
+            m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            m.SetInt("_ZWrite", 0);
+            m.DisableKeyword("_ALPHATEST_ON");
+            m.DisableKeyword("_ALPHABLEND_ON");
+            m.EnableKeyword("_ALPHAPREMULTIPLY_ON");
+            m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            AssetDatabase.CreateAsset(m, path);
+            return m;
+        }
+
         // ------------------------------------------------------------ префабы
 
         /// <summary>Открывает префаб, отдаёт корень в правку и сохраняет.</summary>
