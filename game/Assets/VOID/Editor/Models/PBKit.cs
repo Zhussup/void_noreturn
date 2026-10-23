@@ -25,6 +25,13 @@ namespace VOID.EnvModels
 
             public ProBuilderMesh Add(ProBuilderMesh pb, int sub)
             {
+                // NaN в вершинах подвешивает развёртку UV — падаем сразу и понятно
+                foreach (Vector3 p in pb.positions)
+                    if (float.IsNaN(p.x) || float.IsNaN(p.y) || float.IsNaN(p.z))
+                    {
+                        Object.DestroyImmediate(pb.gameObject);
+                        throw new System.ArgumentException("[VOID] NaN в вершинах детали");
+                    }
                 parts.Add((pb, sub));
                 return pb;
             }
