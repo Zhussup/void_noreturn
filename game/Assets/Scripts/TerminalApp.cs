@@ -33,11 +33,13 @@ public class TerminalApp
 
     enum Mode { Login, LoginOk, Tasks, Sort, Match, Approve, Sabotage, Locked }
 
-    static readonly Color C = new Color(0.55f, 1f, 0.65f);
-    static readonly Color Dim = new Color(0.24f, 0.53f, 0.32f);
-    static readonly Color Warn = new Color(1f, 0.76f, 0.29f);
-    static readonly Color Err = new Color(1f, 0.36f, 0.36f);
-    static readonly Color White = new Color(0.86f, 1f, 0.90f);
+    // цвета — из общей палитры экранов (ScreenStyle / ScreenPalette)
+    static Color C => ScreenPalette.Terminal.Text;
+    static Color Dim => ScreenPalette.Terminal.Dim;
+    static Color Lines => ScreenPalette.Terminal.Lines;
+    static Color Warn => ScreenPalette.Terminal.Warn;
+    static Color Err => ScreenPalette.Terminal.Alarm;
+    static Color White => ScreenPalette.Terminal.Void;
 
     readonly NightDirector dir;
     readonly ScreenSurface s;
@@ -268,7 +270,7 @@ public class TerminalApp
                         "   ЗАДАЧ " + dir.TasksDone + "/" + dir.Tasks.Count +
                         "   ПЛАН " + (dir.State.planStep > 0 ? "1/1" : "0/1");
         L.Add(new ScreenLine(header, dir.State.anxiety > 55f ? Warn : Dim));
-        L.Add(new ScreenLine(new string('-', s.Cols), Dim));
+        L.Add(new ScreenLine(new string('-', s.Cols), Lines));
 
         switch (mode)
         {
@@ -376,7 +378,7 @@ public class TerminalApp
         L.Add(new ScreenLine("КД КИБЕРБЕЗОВ: " + dir.CyberCdText +
                              "   СЛЕД: " + dir.State.suspicion + "%",
                              dir.CyberDanger ? Err : Warn));
-        L.Add(new ScreenLine(new string('-', s.Cols), Dim));
+        L.Add(new ScreenLine(new string('-', s.Cols), Lines));
 
         // Хвост лога держим в рамках экрана: при крупном тексте строк меньше.
         int maxLog = Mathf.Min(8, Mathf.Max(2, s.Rows - 8));
