@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: ScreenStyle
   m_EditorClassIdentifier: Assembly-CSharp::ScreenStyle
   font: {fileID: 12800000, guid: 1d5abe9c6ed69e44e9027eebd7919541, type: 3}
-  crtMaterial: {fileID: 0}
+  crtMaterial: {fileID: 2100000, guid: 609d04890e0838047a110fcb63a6c7a7, type: 2}
   textureSize: {x: 1024, y: 768}
   maxRenderRate: 30
   termBackground: {r: 0.019607844, g: 0.039215688, b: 0.03137255, a: 1}
