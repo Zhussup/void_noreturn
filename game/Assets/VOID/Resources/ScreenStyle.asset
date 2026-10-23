@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 017fce0c89b4b194490d43ee26a3a16e, type: 3}
+  m_Name: ScreenStyle
+  m_EditorClassIdentifier: Assembly-CSharp::ScreenStyle
+  font: {fileID: 0}
+  crtMaterial: {fileID: 0}
+  textureSize: {x: 1024, y: 768}
+  maxRenderRate: 30
+  termBackground: {r: 0.019607844, g: 0.039215688, b: 0.03137255, a: 1}
+  termText: {r: 0.49019608, g: 1, b: 0.6117647, a: 1}
+  termDim: {r: 0.24313726, g: 0.4862745, b: 0.3137255, a: 1}
+  termLines: {r: 0.11764706, g: 0.2901961, b: 0.18039216, a: 1}
+  termWarn: {r: 1, g: 0.7607843, b: 0.2901961, a: 1}
+  termAlarm: {r: 1, g: 0.36078432, b: 0.36078432, a: 1}
+  termVoid: {r: 0.9490196, g: 1, b: 0.9607843, a: 1}
+  msgBackground: {r: 0.047058824, g: 0.05882353, b: 0.047058824, a: 1}
+  msgText: {r: 0.7254902, g: 0.81960785, b: 0.7607843, a: 1}
+  msgDim: {r: 0.4, g: 0.47843137, b: 0.4392157, a: 1}
+  msgAccent: {r: 0.56078434, g: 0.6509804, b: 1, a: 1}
+  msgOk: {r: 0.34901962, g: 1, b: 0.61960787, a: 1}
+  msgWarn: {r: 1, g: 0.7607843, b: 0.2901961, a: 1}
+  msgAlarm: {r: 1, g: 0.36078432, b: 0.36078432, a: 1}
+  msgBright: {r: 0.92156863, g: 0.96862745, b: 0.9411765, a: 1}
