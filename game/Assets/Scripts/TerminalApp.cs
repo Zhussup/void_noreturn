@@ -52,6 +52,11 @@ public class TerminalApp
 
     public bool LoggedIn { get; private set; }
 
+    /// <summary>Сейчас приложение ждёт текст: буква E — часть ввода, не приближение.</summary>
+    public bool CapturingInput =>
+        mode == Mode.Login || mode == Mode.Sort || mode == Mode.Match ||
+        mode == Mode.Approve || mode == Mode.Sabotage;
+
     public TerminalApp(NightDirector dir, ScreenSurface surface)
     {
         this.dir = dir;

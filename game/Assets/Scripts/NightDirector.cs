@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-public enum ModalKind { None, Intro, Call, Dictaphone, Rest, Death, End }
+public enum ModalKind { None, Intro, Call, Dictaphone, Rest, Death, End, Settings }
 
 /// <summary>
 /// Ночь 1 «Смена»: часы, события, звонок шефа, тревога, бессонница,
@@ -29,6 +29,23 @@ public class NightDirector : MonoBehaviour
     public bool Running;
     public bool ModalActive => modal != ModalKind.None;
     public ModalKind Modal => modal;
+
+    // ------------------------------------------------------------ интерфейс
+
+    /// <summary>Варианты размера HUD (множитель кегля).</summary>
+    public static readonly float[] UiScaleSteps = { 1.0f, 1.1f, 1.2f, 1.35f, 1.5f };
+    const string UiScalePref = "vnr.uiScaleIndex";
+
+    /// <summary>Выбранный шаг размера интерфейса; по умолчанию чуть крупнее базового.</summary>
+    public int UiScaleIndex { get; private set; } = 2;
+    public float UiScale =>
+        UiScaleSteps[Mathf.Clamp(UiScaleIndex, 0, UiScaleSteps.Length - 1)];
+
+    /// <summary>Приложение принимает текст: E отдаётся ему, а не приближению монитора.</summary>
+    public bool TextInputActive =>
+        ModalActive ||
+        (ActiveStation == StationTerminal && terminal != null && terminal.CapturingInput) ||
+        (ActiveStation == StationMessenger && messenger != null && messenger.CapturingInput);
 
     // прицел и система действий
     public bool ActionVisible => action != null && action.HasTarget
@@ -67,6 +84,7 @@ public class NightDirector : MonoBehaviour
     ModalKind modal = ModalKind.Intro;
     float introStart;
     const float IntroDuration = 2.8f;
+    bool settingsPrevInput;
 
     TerminalApp terminal;
     MessengerApp messenger;
@@ -115,6 +133,9 @@ public class NightDirector : MonoBehaviour
 
         Player = FindAnyObjectByType<PlayerController>();
         UiFont = MakeFont();
+
+        UiScaleIndex = Mathf.Clamp(PlayerPrefs.GetInt(UiScalePref, UiScaleIndex),
+                                   0, UiScaleSteps.Length - 1);
 
         if (Player != null)
         {
@@ -376,7 +397,12 @@ public class NightDirector : MonoBehaviour
 
     void Update()
     {
-        if (Player != null) ActiveStation = Player.Current;
+        if (Player != null)
+        {
+            ActiveStation = Player.Current;
+            Player.TextInputActive = TextInputActive;
+            if (!Running || ModalActive) Player.ClearFocus();
+        }
 
         if (modal == ModalKind.Intro)
         {
@@ -404,7 +430,22 @@ public class NightDirector : MonoBehaviour
             return;
         }
 
-        bool timeRuns = Running && modal != ModalKind.Death && modal != ModalKind.End;
+        // ESC — пауза с настройками; в приближении монитора ESC сначала
+        // закрывает его (это уже сделал PlayerController).
+        if (Input.GetKeyDown(KeyCode.Escape) &&
+            (Player == null || !Player.EscapeClearedFocus))
+        {
+            if (modal == ModalKind.Settings) CloseSettings();
+            else if (modal == ModalKind.None && Running) OpenSettings();
+        }
+        if (modal == ModalKind.Settings)
+        {
+            ringUntil += Time.deltaTime; // пауза не должна съедать время звонка
+            HandleSettingsInput();
+        }
+
+        bool timeRuns = Running && modal != ModalKind.Death &&
+                        modal != ModalKind.End && modal != ModalKind.Settings;
         if (timeRuns)
         {
             Clock.Tick(Time.deltaTime);
@@ -447,6 +488,41 @@ public class NightDirector : MonoBehaviour
         UpdatePhoneLed();
         UpdateHint();
         UpdateVisuals();
+    }
+
+    // ------------------------------------------------------------ настройки
+
+    void OpenSettings()
+    {
+        settingsPrevInput = Player != null && Player.inputEnabled;
+        modal = ModalKind.Settings;
+        if (Player == null) return;
+        Player.inputEnabled = false;   // станции и действия ждут
+        Player.SetCursorLocked(false); // курсор нужен, чтобы выйти из окна
+    }
+
+    void CloseSettings()
+    {
+        modal = ModalKind.None;
+        if (Player == null) return;
+        Player.inputEnabled = settingsPrevInput;
+        Player.SetCursorLocked(true);
+    }
+
+    void HandleSettingsInput()
+    {
+        if (Input.GetKeyDown(KeyCode.LeftArrow)) AdjustUiScale(-1);
+        if (Input.GetKeyDown(KeyCode.RightArrow)) AdjustUiScale(1);
+    }
+
+    void AdjustUiScale(int delta)
+    {
+        int next = Mathf.Clamp(UiScaleIndex + delta, 0, UiScaleSteps.Length - 1);
+        if (next == UiScaleIndex) return;
+
+        UiScaleIndex = next;
+        PlayerPrefs.SetInt(UiScalePref, UiScaleIndex);
+        PlayerPrefs.Save();
     }
 
     void TickEvents()
@@ -527,6 +603,18 @@ public class NightDirector : MonoBehaviour
             case StationBed:
                 Hint = "E (удерживать) — отдых   ·   TAB — экран   ·   мышь — обзор";
                 break;
+        }
+
+        if (Player != null)
+        {
+            if (Player.MonitorFocused)
+                Hint = TextInputActive
+                    ? "ESC — вернуться к комнате"
+                    : "E — вернуться к комнате";
+            else if (Player.CanFocusMonitor)
+                Hint += "   ·   E — приблизить";
+            else if (!TextInputActive)
+                Hint += "   ·   Z — зум";
         }
     }
 
@@ -632,6 +720,7 @@ public class NightDirector : MonoBehaviour
     void TickPhone()
     {
         if (!Running && modal != ModalKind.Call) return;
+        if (modal == ModalKind.Settings) return; // пауза не «съедает» звонок
 
         if (phone == PhoneState.Ringing && Time.time > ringUntil)
         {

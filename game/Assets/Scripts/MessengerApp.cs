@@ -34,6 +34,9 @@ public class MessengerApp
         s = surface;
     }
 
+    /// <summary>Сейчас приложение ждёт оценку настроения: E — часть ввода.</summary>
+    public bool CapturingInput => dir.MoodPending && channel == (int)ChatChannel.Harmony;
+
     public void Tick()
     {
         if (!dir.Running || dir.ModalActive) return;
