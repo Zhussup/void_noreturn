@@ -124,8 +124,10 @@ public class MessengerApp
             scroll = 0;
         }
 
-        const int inputRow = 17;
-        int visible = inputRow - 3;
+        // Нижние две строки зарезервированы под ввод и подсказку; остальное —
+        // лента. Считаем от фактического числа строк экрана: при крупном
+        // тексте строк меньше, и жёсткая константа обрезала бы ввод.
+        int visible = Mathf.Max(1, s.Rows - 5);
         int maxScroll = Mathf.Max(0, lines.Count - visible);
         scroll = Mathf.Clamp(scroll, 0, maxScroll);
         int start = Mathf.Max(0, lines.Count - visible - scroll);
@@ -154,7 +156,7 @@ public class MessengerApp
             L.Add(new ScreenLine("", C));
         }
 
-        L.Add(new ScreenLine("←→ каналы   ↑↓ прокрутка   TAB сменить экран", Dim));
+        L.Add(new ScreenLine("←→ каналы  ↑↓ прокрутка  TAB экран", Dim));
         s.Set(L);
     }
 

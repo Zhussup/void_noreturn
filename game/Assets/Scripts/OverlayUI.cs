@@ -340,7 +340,7 @@ public class OverlayUI : MonoBehaviour
         y += 18f * s;
 
         GUI.Label(new Rect(panel.x + pad, y, pw - 2f * pad, hintH),
-                  "РАЗМЕР ИНТЕРФЕЙСА", hintStyle);
+                  "РАЗМЕР ТЕКСТА", hintStyle);
         y += hintH + 12f * s;
 
         float x = panel.x + (pw - cardsW) * 0.5f;

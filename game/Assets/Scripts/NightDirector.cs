@@ -32,11 +32,11 @@ public class NightDirector : MonoBehaviour
 
     // ------------------------------------------------------------ интерфейс
 
-    /// <summary>Варианты размера HUD (множитель кегля).</summary>
+    /// <summary>Варианты размера текста: HUD и надписи на мониторах.</summary>
     public static readonly float[] UiScaleSteps = { 1.0f, 1.1f, 1.2f, 1.35f, 1.5f };
     const string UiScalePref = "vnr.uiScaleIndex";
 
-    /// <summary>Выбранный шаг размера интерфейса; по умолчанию чуть крупнее базового.</summary>
+    /// <summary>Выбранный шаг размера; по умолчанию чуть крупнее базового.</summary>
     public int UiScaleIndex { get; private set; } = 2;
     public float UiScale =>
         UiScaleSteps[Mathf.Clamp(UiScaleIndex, 0, UiScaleSteps.Length - 1)];
@@ -91,6 +91,7 @@ public class NightDirector : MonoBehaviour
     ActionSystem action;
     Interactable phoneInteractable;
     ScreenSurface terminalSurface, messengerSurface, laptopSurface;
+    List<ScreenLine> laptopLines;
 
     float flashUntil;
     float subtitleUntil;
@@ -188,20 +189,35 @@ public class NightDirector : MonoBehaviour
         if (laptop != null)
         {
             laptopSurface = ScreenSurface.Create(laptop, UiFont, 0.00064f, 0.0115f);
-            var ll = new List<ScreenLine>
+            laptopLines = new List<ScreenLine>
             {
                 new ScreenLine("", Color.white),
                 new ScreenLine("  GANDEX-OS", new Color(0.30f, 0.70f, 0.62f)),
                 new ScreenLine("  локальная машина", new Color(0.12f, 0.28f, 0.26f)),
                 new ScreenLine("  экран заблокирован", new Color(0.12f, 0.28f, 0.26f)),
             };
-            laptopSurface.Set(ll);
+            laptopSurface.Set(laptopLines);
         }
 
         if (terminalSurface != null)
             terminal = new TerminalApp(this, terminalSurface);
         if (messengerSurface != null)
             messenger = new MessengerApp(this, messengerSurface);
+
+        ApplyTextScale();
+    }
+
+    /// <summary>Размер текста на физических экранах следует за настройкой HUD.</summary>
+    void ApplyTextScale()
+    {
+        if (terminalSurface != null) terminalSurface.SetScale(UiScale);
+        if (messengerSurface != null) messengerSurface.SetScale(UiScale);
+        if (laptopSurface != null)
+        {
+            laptopSurface.SetScale(UiScale);
+            // Экран ноутбука статичный: после пересборки возвращаем его надпись.
+            if (laptopLines != null) laptopSurface.Set(laptopLines);
+        }
     }
 
     static Transform FindScreen(string monitorName)
@@ -505,6 +521,7 @@ public class NightDirector : MonoBehaviour
         UiScaleIndex = next;
         PlayerPrefs.SetInt(UiScalePref, UiScaleIndex);
         PlayerPrefs.Save();
+        ApplyTextScale(); // текст на мониторах перестраивается сразу
     }
 
     void OpenSettings()

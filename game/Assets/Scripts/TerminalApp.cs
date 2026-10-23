@@ -378,7 +378,9 @@ public class TerminalApp
                              dir.CyberDanger ? Err : Warn));
         L.Add(new ScreenLine(new string('-', s.Cols), Dim));
 
-        int start = Mathf.Max(0, outLog.Count - 8);
+        // Хвост лога держим в рамках экрана: при крупном тексте строк меньше.
+        int maxLog = Mathf.Min(8, Mathf.Max(2, s.Rows - 8));
+        int start = Mathf.Max(0, outLog.Count - maxLog);
         for (int i = start; i < outLog.Count; i++)
             L.Add(new ScreenLine(outLog[i], i == outLog.Count - 1 ? White : C));
 

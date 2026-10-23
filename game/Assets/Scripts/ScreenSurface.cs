@@ -27,6 +27,11 @@ public class ScreenSurface : MonoBehaviour
     public float padY = 0.010f;
     public Font font;
 
+    // Базовые метрики: от них считается пользовательский размер текста.
+    float baseCharacterSize = 0.00064f;
+    float baseLineHeight = 0.0115f;
+    float appliedScale = 1f;
+
     /// <summary>
     /// Кегль, с которым создаётся динамический шрифт. TextMesh масштабирует
     /// глиф как characterSize * fontSize / 10, поэтому ширина символа считается
@@ -55,10 +60,41 @@ public class ScreenSurface : MonoBehaviour
         var s = go.AddComponent<ScreenSurface>();
         s.screen = screenQuad;
         s.font = font;
+        s.baseCharacterSize = characterSize;
+        s.baseLineHeight = lineHeight;
         s.characterSize = characterSize;
         s.lineHeight = lineHeight;
         s.Init();
         return s;
+    }
+
+    /// <summary>
+    /// Пересобрать сетку под выбранный размер текста. Колонок и строк станет
+    /// меньше — приложения считают раскладку по Cols/Rows и подстраиваются.
+    /// </summary>
+    public void SetScale(float scale)
+    {
+        scale = Mathf.Clamp(scale, 0.8f, 1.6f);
+        if (Mathf.Abs(scale - appliedScale) < 0.001f) return;
+
+        appliedScale = scale;
+        characterSize = baseCharacterSize * scale;
+        lineHeight = baseLineHeight * scale;
+        Rebuild();
+    }
+
+    void Rebuild()
+    {
+        for (int i = 0; i < pool.Count; i++)
+        {
+            if (pool[i] == null) continue;
+            pool[i].gameObject.SetActive(false);
+            Destroy(pool[i].gameObject);
+        }
+        pool.Clear();
+        lastText.Clear();
+        lastColor.Clear();
+        Init();
     }
 
     void Init()
