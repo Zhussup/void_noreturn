@@ -15,6 +15,7 @@ public class OverlayUI : MonoBehaviour
 
     GUIStyle center, title, endStyle, callName, callLine, callInput, hintStyle, subtitleStyle;
     GUIStyle actionGray, actionTyped, actionError, settingsTitle, settingsOption, settingsValue;
+    GUIStyle hudText, hudWarn, hudBad;
     float styledScale = -1f;
     float styledTypeInScale = -1f;
 
@@ -115,6 +116,18 @@ public class OverlayUI : MonoBehaviour
 
         settingsValue = new GUIStyle(settingsOption);
         settingsValue.normal.textColor = new Color(1f, 0.76f, 0.29f);
+
+        hudText = new GUIStyle(center);
+        hudText.fontSize = Mathf.RoundToInt(Screen.height * 0.017f * s);
+        hudText.alignment = TextAnchor.MiddleLeft;
+        hudText.wordWrap = false;
+        hudText.normal.textColor = new Color(0.72f, 0.79f, 0.75f, 0.90f);
+
+        hudWarn = new GUIStyle(hudText);
+        hudWarn.normal.textColor = new Color(1f, 0.76f, 0.29f, 0.95f);
+
+        hudBad = new GUIStyle(hudText);
+        hudBad.normal.textColor = new Color(1f, 0.36f, 0.36f, 0.95f);
     }
 
     void OnGUI()
@@ -144,6 +157,7 @@ public class OverlayUI : MonoBehaviour
         if (dir.Running &&
             (dir.Modal == ModalKind.None || dir.Modal == ModalKind.Call))
         {
+            DrawStatusHud(w, h);
             DrawCrosshair(w, h);
             if (dir.ActionVisible) DrawAction(w, h);
         }
@@ -176,6 +190,68 @@ public class OverlayUI : MonoBehaviour
             var r = new Rect(0f, h - h * 0.035f * s, w, h * 0.03f * s);
             GUI.Label(r, dir.Hint, hintStyle);
         }
+    }
+
+    /// <summary>Минимальный HUD состояния: ночь, тревога, сонливость, след/логи, таблетки, кибербезы.</summary>
+    void DrawStatusHud(float w, float h)
+    {
+        float s = dir.UiScale;
+        float lineH = hudText.lineHeight + 3f * s;
+        float pad = 10f * s;
+        float panelW = Mathf.Min(260f * s, w * 0.42f);
+        float panelH = pad * 2f + lineH * 6f + 18f * s;
+
+        var panel = new Rect(16f * s - pad, 16f * s - pad, panelW, panelH);
+        DrawSolid(panel, new Color(0.02f, 0.03f, 0.025f, 0.55f));
+        DrawBorder(panel, Mathf.Max(1f, s), new Color(1f, 1f, 1f, 0.10f));
+
+        float x = panel.x + pad;
+        float y = panel.y + pad;
+        float textW = panel.width - pad * 2f;
+
+        GUI.Label(new Rect(x, y, textW, lineH),
+                  "НОЧЬ " + dir.State.night + " · " + dir.Clock.Display, hudText);
+        y += lineH;
+
+        float anxiety = Mathf.Clamp(dir.State.anxiety, 0f, 100f);
+        GUIStyle anxietyStyle = anxiety >= 75f ? hudBad : anxiety >= 55f ? hudWarn : hudText;
+        GUI.Label(new Rect(x, y, textW, lineH),
+                  "ТРЕВОГА  " + Mathf.RoundToInt(anxiety) + "%", anxietyStyle);
+        y += lineH;
+        DrawBar(new Rect(x, y - 2f * s, textW, 3f * s), anxiety / 100f,
+                anxiety >= 75f ? new Color(1f, 0.36f, 0.36f, 0.90f)
+                : anxiety >= 55f ? new Color(1f, 0.76f, 0.29f, 0.90f)
+                : new Color(0.55f, 0.85f, 0.65f, 0.75f));
+        y += 6f * s;
+
+        GUI.Label(new Rect(x, y, textW, lineH),
+                  "СОНЛИВОСТЬ  " + dir.State.insomnia + "/5", hudText);
+        y += lineH;
+
+        bool dirty = dir.State.dirtyLogs;
+        GUI.Label(new Rect(x, y, textW, lineH),
+                  "СЛЕД  " + dir.State.suspicion + "%   ЛОГИ: " + (dirty ? "ГРЯЗНЫЕ" : "ЧИСТО"),
+                  dirty ? hudWarn : hudText);
+        y += lineH;
+        DrawBar(new Rect(x, y - 2f * s, textW, 3f * s), dir.State.suspicion / 100f,
+                dirty ? new Color(1f, 0.76f, 0.29f, 0.90f)
+                      : new Color(0.55f, 0.85f, 0.65f, 0.55f));
+        y += 6f * s;
+
+        GUI.Label(new Rect(x, y, textW, lineH),
+                  "ТАБЛЕТКИ  " + dir.State.pills, hudText);
+        y += lineH;
+        GUI.Label(new Rect(x, y, textW, lineH),
+                  "КИБЕРБЕЗЫ  " + dir.CyberCdText,
+                  dir.CyberDanger ? hudBad : hudText);
+    }
+
+    void DrawBar(Rect r, float fill, Color color)
+    {
+        DrawSolid(r, new Color(1f, 1f, 1f, 0.10f));
+        float clamped = Mathf.Clamp01(fill);
+        if (clamped > 0f)
+            DrawSolid(new Rect(r.x, r.y, r.width * clamped, r.height), color);
     }
 
     void DrawCrosshair(float w, float h)
@@ -271,8 +347,7 @@ public class OverlayUI : MonoBehaviour
 
         if (dir.CallAwaitingAnswer)
         {
-            string shown = "ОТВЕТ: " + dir.CallAnswer +
-                           (dir.CallTypo ? " ▌" : (Time.time % 1f < 0.55f ? "_" : " "));
+            string shown = "ОТВЕТ: " + dir.CallAnswerView;
             float inputH = Mathf.Max(34f * s, callInput.lineHeight);
             var inR = new Rect(band.x + 24f * s, band.y + 104f * s, band.width - 48f * s, inputH);
             GUI.Label(inR, shown, dir.CallTypo

@@ -43,14 +43,20 @@ public class MessengerApp
         if (!dir.Running || dir.ModalActive) return;
         if (dir.ActiveStation != StationIndex) return;
 
-        if (Input.GetKeyDown(KeyCode.LeftArrow)) { channel = (channel + 3) % 4; scroll = 0; }
-        if (Input.GetKeyDown(KeyCode.RightArrow)) { channel = (channel + 1) % 4; scroll = 0; }
-        if (Input.GetKeyDown(KeyCode.UpArrow)) scroll++;
-        if (Input.GetKeyDown(KeyCode.DownArrow)) scroll = Mathf.Max(0, scroll - 1);
+        bool typing = dir.MoodPending && channel == (int)ChatChannel.Harmony;
+
+        // Пока строка ввода активна, стрелки принадлежат ей, а не каналам.
+        if (!typing)
+        {
+            if (Input.GetKeyDown(KeyCode.LeftArrow)) { channel = (channel + 3) % 4; scroll = 0; }
+            if (Input.GetKeyDown(KeyCode.RightArrow)) { channel = (channel + 1) % 4; scroll = 0; }
+            if (Input.GetKeyDown(KeyCode.UpArrow)) scroll++;
+            if (Input.GetKeyDown(KeyCode.DownArrow)) scroll = Mathf.Max(0, scroll - 1);
+        }
 
         dir.MarkRead((ChatChannel)channel);
 
-        if (dir.MoodPending && channel == (int)ChatChannel.Harmony)
+        if (typing)
         {
             moodInput.Tick(dir.TypoChance);
             // в оценке настроения допустимы только цифры
@@ -58,7 +64,8 @@ public class MessengerApp
             for (int i = 0; i < moodInput.text.Length; i++)
                 if (char.IsDigit(moodInput.text[i])) digits += moodInput.text[i];
             if (digits.Length > 2) digits = digits.Substring(0, 2);
-            moodInput.text = digits;
+            if (digits != moodInput.text) moodInput.SetText(digits);
+            else moodInput.ClampCaret();
 
             bool enter = Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter);
             if (enter)
@@ -143,9 +150,9 @@ public class MessengerApp
         // строка вопросов/оценки настроения
         if (dir.MoodPending && channel == (int)ChatChannel.Harmony)
         {
-            string shown = moodInput.RejectedRecently
-                ? "ОЦЕНКА 1–10: " + moodInput.text + " ▌"
-                : "ОЦЕНКА 1–10: " + moodInput.text + (Time.time % 1f < 0.55f ? "_" : " ");
+            bool showCaret = moodInput.RejectedRecently || Time.time % 1f < 0.55f;
+            string cursor = moodInput.RejectedRecently ? "▌" : "_";
+            string shown = "ОЦЕНКА 1–10: " + moodInput.WithCursor(showCaret, cursor);
             L.Add(new ScreenLine(shown, moodInput.RejectedRecently ? Err : White, dir.TypeInScale));
         }
         else if (!string.IsNullOrEmpty(message) && Time.time < messageUntil)

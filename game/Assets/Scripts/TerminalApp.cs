@@ -228,6 +228,7 @@ public class TerminalApp
             outLog.Add("connect <srv>   подключиться к серверу");
             outLog.Add("devs --all      коды сотрудников");
             outLog.Add("logs            состояние логов");
+            outLog.Add("clear           очистить логи (оставляет след)");
             outLog.Add("exit            выйти");
         }
         else if (cmd == "scan")
@@ -243,12 +244,14 @@ public class TerminalApp
         }
         else if (cmd == "devs --all")
         {
+            dir.State.dirtyLogs = true;
             outLog.Add("СОТРУДНИКИ: ДЖОЭЛ — " + CodeState(0));
             outLog.Add("             ДЭЛАЙЛА — " + CodeState(1));
             outLog.Add("             КУПЛИНОВ — " + CodeState(2));
         }
         else if (cmd.StartsWith("connect"))
         {
+            dir.State.dirtyLogs = true;
             outLog.Add("ПОДКЛЮЧЕНИЕ...");
             outLog.Add("ОТКАЗАНО. НУЖЕН ДОСТУП ДЦ-7 (3 КОДА).");
         }
@@ -256,10 +259,13 @@ public class TerminalApp
         {
             outLog.Add("ПРОВЕРКА КИБЕРБЕЗОВ: " + dir.CyberCdText);
             outLog.Add("СЛЕДОВ В ЛОГАХ: " + dir.State.suspicion + "%");
+            outLog.Add("СОСТОЯНИЕ: " + (dir.State.dirtyLogs ? "ГРЯЗНЫЕ" : "ЧИСТО"));
         }
         else if (cmd == "clear")
         {
-            outLog.Add("НЕЧЕГО ЧИСТИТЬ.");
+            dir.State.dirtyLogs = true;
+            dir.State.suspicion = Mathf.Max(0, dir.State.suspicion - 5);
+            outLog.Add("ЛОГИ ОЧИЩЕНЫ. СЛЕД ОСТАЛСЯ: " + dir.State.suspicion + "%");
         }
         else if (cmd == "whoami")
         {
@@ -308,7 +314,7 @@ public class TerminalApp
         {
             historyPos--;
         }
-        input.text = history[historyPos];
+        input.SetText(history[historyPos]);
     }
 
     /// <summary>↓ — следующая команда; после последней возвращает черновик.</summary>
@@ -319,11 +325,11 @@ public class TerminalApp
         if (historyPos >= history.Count)
         {
             historyPos = -1;
-            input.text = historyDraft;
+            input.SetText(historyDraft);
         }
         else
         {
-            input.text = history[historyPos];
+            input.SetText(history[historyPos]);
         }
     }
 
@@ -372,9 +378,9 @@ public class TerminalApp
         L.Add(new ScreenLine("НОЧНАЯ СМЕНА · ДИУ-2", Dim));
         L.Add(new ScreenLine("", C));
         L.Add(new ScreenLine("ПАРОЛЬ:", C));
-        string shown = input.RejectedRecently
-            ? "> " + input.Masked() + " ▌"
-            : "> " + input.Masked() + (Time.time % 1f < 0.55f ? "_" : " ");
+        bool showCaret = input.RejectedRecently || Time.time % 1f < 0.55f;
+        string cursor = input.RejectedRecently ? "▌" : "_";
+        string shown = "> " + input.MaskedWithCursor(showCaret, cursor);
         L.Add(new ScreenLine(shown, input.RejectedRecently ? Err : White, dir.TypeInScale));
         L.Add(new ScreenLine("", C));
         L.Add(new ScreenLine("смена 1 — вход разрешён по паролю", Dim));
@@ -447,9 +453,9 @@ public class TerminalApp
             return;
         }
 
-        string shown = input.RejectedRecently
-            ? "> " + input.text + " ▌"
-            : "> " + input.text + (Time.time % 1f < 0.55f ? "_" : " ");
+        bool showCaret = input.RejectedRecently || Time.time % 1f < 0.55f;
+        string cursor = input.RejectedRecently ? "▌" : "_";
+        string shown = "> " + input.WithCursor(showCaret, cursor);
         L.Add(new ScreenLine(shown, input.RejectedRecently ? Err : White, dir.TypeInScale));
         L.Add(new ScreenLine("", C));
         L.Add(new ScreenLine("[ENTER] принять   [CTRL+C] назад", Dim));
@@ -470,9 +476,9 @@ public class TerminalApp
             L.Add(new ScreenLine(outLog[i], i == outLog.Count - 1 ? White : C));
 
         L.Add(new ScreenLine("", C));
-        string shown = input.RejectedRecently
-            ? "> " + input.text + " ▌"
-            : "> " + input.text + (Time.time % 1f < 0.55f ? "_" : " ");
+        bool showCaret = input.RejectedRecently || Time.time % 1f < 0.55f;
+        string cursor = input.RejectedRecently ? "▌" : "_";
+        string shown = "> " + input.WithCursor(showCaret, cursor);
         L.Add(new ScreenLine(shown, input.RejectedRecently ? Err : White, dir.TypeInScale));
         L.Add(new ScreenLine("[↑↓] история   [exit]/[CTRL+C] назад", Dim));
     }

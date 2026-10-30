@@ -22,6 +22,7 @@ public class GameState
     [Header("Прогресс саботажа")]
     public int planStep;           // 0 — разведка не сделана, 1 — ДЦ-7 найден
     public int suspicion;          // 0..100, кибербезы
+    public bool dirtyLogs;         // в логах остались следы Брика
     public int traces;             // следы Брика (ночь 4)
     public bool[] codes = new bool[3];
     public bool[] records = new bool[4]; // прослушанные записи диктофона
@@ -41,6 +42,7 @@ public class GameState
         moodAnswered = false;
         planStep = 0;
         suspicion = 0;
+        dirtyLogs = false;
         tasksDone = 0;
         if (codes == null || codes.Length != 3) codes = new bool[3];
         if (records == null || records.Length != 4) records = new bool[4];

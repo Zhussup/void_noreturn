@@ -64,6 +64,16 @@ public class PlayerController : MonoBehaviour
     public float focusLerp = 9f;
     public float focusMaxDistance = 3f;
 
+    [Header("Магнит экрана в приближении")]
+    [Tooltip("Чувствительность мыши в фокусе, градусов на единицу оси")]
+    public float focusMouseSensitivity = 0.65f;
+    [Tooltip("Мягкий предел ухода от центра экрана, градусы")]
+    public float focusMaxYaw = 12f;
+    public float focusMaxPitch = 8f;
+    [Tooltip("Скорость возврата к центру экрана, 1/с")]
+    public float focusReturn = 2.4f;
+    public float focusLookLerp = 12f;
+
     [Header("Блокировка (диалоги, провалы, конец ночи)")]
     public bool inputEnabled = true;   // переключение станций
     public bool lookEnabled = true;    // обзор мышью
@@ -96,6 +106,8 @@ public class PlayerController : MonoBehaviour
     float focusBlend;
     float zoomBlend;
     Quaternion focusWorldRot;
+    float focusLookYaw, focusLookPitch;     // текущий мягкий сдвиг взгляда в фокусе
+    float focusTargetYaw, focusTargetPitch; // цель сдвига от мыши
     Transform aimMonitor;
     Transform focusScreen;
     readonly RaycastHit[] aimHits = new RaycastHit[16];
@@ -282,6 +294,8 @@ public class PlayerController : MonoBehaviour
 
         focusWorldRot = Quaternion.LookRotation(dir.normalized, Vector3.up);
         focusFov = FocusFov(Mathf.Abs(screen.lossyScale.x), dir.magnitude);
+        focusLookYaw = focusLookPitch = 0f;
+        focusTargetYaw = focusTargetPitch = 0f;
     }
 
     /// <summary>FOV, при котором экран занимает focusScreenFill ширины кадра.</summary>
@@ -302,6 +316,8 @@ public class PlayerController : MonoBehaviour
     public void ClearFocus(bool immediate = false)
     {
         focusScreen = null;
+        focusTargetYaw = focusTargetPitch = 0f;
+        focusLookYaw = focusLookPitch = 0f;
         if (!immediate) return;
 
         focusBlend = 0f;
@@ -321,9 +337,28 @@ public class PlayerController : MonoBehaviour
         zoomBlend = Mathf.Lerp(zoomBlend, targetZoom, 1f - Mathf.Exp(-zoomLerp * dt));
         if (Mathf.Abs(zoomBlend - targetZoom) < 0.001f) zoomBlend = targetZoom;
 
+        // Магнит: без активного ввода цель плавно тянется к центру экрана.
+        if (MonitorFocused)
+        {
+            float pull = TextInputActive ? focusReturn * 2.5f : focusReturn;
+            float kp = 1f - Mathf.Exp(-pull * dt);
+            focusTargetYaw = Mathf.LerpAngle(focusTargetYaw, 0f, kp);
+            focusTargetPitch = Mathf.LerpAngle(focusTargetPitch, 0f, kp);
+
+            float kl = 1f - Mathf.Exp(-focusLookLerp * dt);
+            focusLookYaw = Mathf.LerpAngle(focusLookYaw, focusTargetYaw, kl);
+            focusLookPitch = Mathf.LerpAngle(focusLookPitch, focusTargetPitch, kl);
+        }
+        else
+        {
+            focusTargetYaw = focusTargetPitch = 0f;
+            focusLookYaw = focusLookPitch = 0f;
+        }
+
         Quaternion normal = Quaternion.Euler(basePitch - lookPitch, baseYaw + lookYaw, 0f);
+        Quaternion focusRot = focusWorldRot * Quaternion.Euler(-focusLookPitch, focusLookYaw, 0f);
         Quaternion world = focusBlend > 0f
-            ? Quaternion.Slerp(normal, focusWorldRot, focusBlend)
+            ? Quaternion.Slerp(normal, focusRot, focusBlend)
             : normal;
         cameraTransform.localRotation = Quaternion.Inverse(transform.rotation) * world;
 
@@ -369,16 +404,37 @@ public class PlayerController : MonoBehaviour
 
     void HandleMouseLook()
     {
-        if (MonitorFocused) return; // в приближении кадр держится на экране
         if (!lookEnabled || cameraTransform == null) return;
         if (Cursor.lockState != CursorLockMode.Locked) return;
 
-        float mx = Input.GetAxisRaw("Mouse X") * mouseSensitivity;
-        float my = Input.GetAxisRaw("Mouse Y") * mouseSensitivity;
+        float rawX = Input.GetAxisRaw("Mouse X");
+        float rawY = Input.GetAxisRaw("Mouse Y");
+
+        if (MonitorFocused)
+        {
+            // В приближении взгляд не заморожен: мышь двигает его в маленьком
+            // диапазоне, а мягкий предел и возврат к центру не дают уйти далеко.
+            if (TextInputActive) return; // печатаем — держим экран ровно
+            if (Mathf.Abs(rawX) > 0.0001f) focusTargetYaw += rawX * focusMouseSensitivity;
+            if (Mathf.Abs(rawY) > 0.0001f) focusTargetPitch += rawY * focusMouseSensitivity;
+            focusTargetYaw = SoftLimit(focusTargetYaw, focusMaxYaw);
+            focusTargetPitch = SoftLimit(focusTargetPitch, focusMaxPitch);
+            return;
+        }
+
+        float mx = rawX * mouseSensitivity;
+        float my = rawY * mouseSensitivity;
         if (Mathf.Abs(mx) < 0.0001f && Mathf.Abs(my) < 0.0001f) return;
 
         lookTargetYaw = Mathf.Clamp(lookTargetYaw + mx, -maxYaw, maxYaw);
         lookTargetPitch = Mathf.Clamp(lookTargetPitch + my, -maxPitch, maxPitch);
+    }
+
+    /// <summary>Мягкий предел: вблизи центра почти линейно, к краю асимптотически.</summary>
+    static float SoftLimit(float value, float limit)
+    {
+        if (limit <= 0.0001f) return 0f;
+        return limit * (float)System.Math.Tanh(value / limit);
     }
 
     /// <summary>Плавно подтягивает позицию и углы к целям (станция и мышь).</summary>

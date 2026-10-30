@@ -89,6 +89,16 @@ public class NightDirector : MonoBehaviour
     // звонок
     public string CallLine = "";
     public string CallAnswer => callField.text;
+    /// <summary>Ответ с курсором в позиции редактирования (а не только в конце).</summary>
+    public string CallAnswerView
+    {
+        get
+        {
+            bool show = callField.RejectedRecently || Time.time % 1f < 0.55f;
+            string cursor = callField.RejectedRecently ? "▌" : "_";
+            return callField.WithCursor(show, cursor);
+        }
+    }
     public bool CallAwaitingAnswer => callStage == 0;
     public bool CallTypo => callField.RejectedRecently;
 
@@ -174,6 +184,20 @@ public class NightDirector : MonoBehaviour
         ActiveStation = StationTerminal;
         introStart = Time.time;
         IntroAlpha = 1f;
+        Debug.Log("[VNR] Entry point: NightDirector.Start · объект Game · Assets/Scenes/Office.unity");
+    }
+
+    /// <summary>ENTRY POINT смены: интро закончилось, управление отдано игроку.</summary>
+    public void BeginShift()
+    {
+        modal = ModalKind.None;
+        Running = true;
+        if (Player != null)
+        {
+            Player.inputEnabled = true;
+            Player.lookEnabled = true;
+        }
+        ShowSubtitle("Смена началась. Войдите в терминал.", 3.5f);
     }
 
     static Font MakeFont()
@@ -444,17 +468,7 @@ public class NightDirector : MonoBehaviour
         {
             float t = Time.time - introStart;
             IntroAlpha = t < 1.6f ? 1f : Mathf.Clamp01(1f - (t - 1.6f) / 1.1f);
-            if (t >= IntroDuration)
-            {
-                modal = ModalKind.None;
-                Running = true;
-                if (Player != null)
-                {
-                    Player.inputEnabled = true;
-                    Player.lookEnabled = true;
-                }
-                ShowSubtitle("Смена началась. Войдите в терминал.", 3.5f);
-            }
+            if (t >= IntroDuration) BeginShift();
             UpdateVisuals();
             return;
         }
@@ -625,8 +639,18 @@ public class NightDirector : MonoBehaviour
         if (cyberCd <= 0f)
         {
             cyberCd = 280f;
-            AddChat(ChatChannel.Security, "КИБЕРБЕЗОПАСНОСТЬ",
-                "ПЛАНОВАЯ ПРОВЕРКА ЛОГОВ: НАРУШЕНИЙ НЕТ.", Clock.Display);
+            // Плановая проверка: грязные логи бьют по тревоге.
+            if (State.dirtyLogs)
+            {
+                AddAnxiety(4f + 0.05f * State.suspicion);
+                AddChat(ChatChannel.Security, "КИБЕРБЕЗОПАСНОСТЬ",
+                    "ПЛАНОВАЯ ПРОВЕРКА ЛОГОВ: ГРЯЗНЫЕ, СЛЕД " + State.suspicion + "%.", Clock.Display);
+            }
+            else
+            {
+                AddChat(ChatChannel.Security, "КИБЕРБЕЗОПАСНОСТЬ",
+                    "ПЛАНОВАЯ ПРОВЕРКА ЛОГОВ: НАРУШЕНИЙ НЕТ.", Clock.Display);
+            }
             if (State.suspicion >= 100) StartCyberDeath();
             else State.suspicion = Mathf.Min(100, State.suspicion + 1);
         }
@@ -637,8 +661,10 @@ public class NightDirector : MonoBehaviour
 
     void TickAnxiety(float dt)
     {
-        float baseRate = 0.030f + 0.015f * Mathf.Max(0, State.insomnia - 1);
-        State.anxiety = Mathf.Clamp(State.anxiety + baseRate * dt, 0f, 100f);
+        float rate = 0.030f + 0.015f * Mathf.Max(0, State.insomnia - 1);
+        // Кибербезы подходят к проверке, а в логах след — тревога растёт быстрее.
+        if (State.dirtyLogs && CyberDanger) rate += 0.055f;
+        State.anxiety = Mathf.Clamp(State.anxiety + rate * dt, 0f, 100f);
         if (State.anxiety >= 100f) StartDeath();
     }
 
