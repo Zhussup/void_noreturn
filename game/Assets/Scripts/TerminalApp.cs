@@ -1032,7 +1032,6 @@ public class TerminalApp
         L.Add(new ScreenLine("2. grep \"дц-7\" → целевой файл", C));
         L.Add(new ScreenLine("3. download <файл>", C));
         L.Add(new ScreenLine("4. Здесь продайте данные.", C));
-        L.Add(new ScreenLine("", C));
         L.Add(new ScreenLine("Скорость выше 2 увеличивает след.", Dim));
         L.Add(new ScreenLine("Не попадитесь на проверке.", Dim));
         L.Add(new ScreenLine("ENTER / CTRL+C — назад", Dim));

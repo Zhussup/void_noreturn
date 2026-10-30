@@ -218,26 +218,46 @@ public class NightDirector : MonoBehaviour
         return f;
     }
 
+    // Эталон текста — экран 0.32 × 0.24 м. Монитор в сцене увеличен до 1.35×,
+    // поэтому кегль и шаг строк считаются от фактической высоты экрана.
+    const float RefScreenHeight = 0.24f;
+    const float RefCharSize = 0.00064f;
+    const float RefLineHeight = 0.0115f;
+    const float LineSpacingBoost = 1.12f; // чуть больше воздуха между строками
+
+    /// <summary>Кегль и шаг строк под физическую высоту экрана.</summary>
+    static void TextMetrics(Transform screen, out float charSize, out float lineHeight)
+    {
+        float k = 1f;
+        if (screen != null && screen.lossyScale.y > 0.001f)
+            k = Mathf.Max(0.5f, screen.lossyScale.y / RefScreenHeight);
+        charSize = RefCharSize * k;
+        lineHeight = RefLineHeight * k * LineSpacingBoost;
+    }
+
     void BuildSurfaces()
     {
         Transform term = FindScreen("Monitor_Terminal");
         Transform chat = FindScreen("Monitor_Chat");
         Transform laptop = FindLaptopScreen();
 
-        // Экраны в комнате друга — 0.32 × 0.24 м. TextMesh масштабирует глиф
-        // как characterSize * fontSize / 10, поэтому 0.00064 при fontSize 128
-        // даёт шаг ~4.93 мм и ровно 60 колонок; lineHeight 0.0115 — 19 строк.
         if (term != null)
         {
-            terminalSurface = ScreenSurface.Create(term, UiFont, 0.00064f, 0.0115f);
+            float cs, lh;
+            TextMetrics(term, out cs, out lh);
+            terminalSurface = ScreenSurface.Create(term, UiFont, cs, lh);
         }
         if (chat != null)
         {
-            messengerSurface = ScreenSurface.Create(chat, UiFont, 0.00064f, 0.0115f);
+            float cs, lh;
+            TextMetrics(chat, out cs, out lh);
+            messengerSurface = ScreenSurface.Create(chat, UiFont, cs, lh);
         }
         if (laptop != null)
         {
-            laptopSurface = ScreenSurface.Create(laptop, UiFont, 0.00064f, 0.0115f);
+            float cs, lh;
+            TextMetrics(laptop, out cs, out lh);
+            laptopSurface = ScreenSurface.Create(laptop, UiFont, cs, lh);
             laptopLines = new List<ScreenLine>
             {
                 new ScreenLine("", Color.white),
