@@ -22,6 +22,8 @@ public class NightDirector : MonoBehaviour
     public readonly List<TaskDef> Tasks = new List<TaskDef>();
     public readonly List<ChatMessage> Messages = new List<ChatMessage>();
     public readonly bool[] Unread = new bool[4];
+    /// <summary>Целевые файлы, уже скачанные с серверов сотрудников.</summary>
+    public readonly List<string> StolenFiles = new List<string>();
 
     public Font UiFont;
     public PlayerController Player;
@@ -145,6 +147,7 @@ public class NightDirector : MonoBehaviour
     const float CallDelayAfterLogin = 3f;
 
     float cyberCd = 300f;
+    float logCleanReady;
     int lastMinute = -1;
 
     class Evt
@@ -1075,6 +1078,36 @@ public class NightDirector : MonoBehaviour
     {
         State.anxiety = Mathf.Clamp(State.anxiety + amount, 0f, 100f);
         if (State.anxiety >= 100f) StartDeath();
+    }
+
+    // ------------------------------------------------------------ данные и логи
+
+    /// <summary>Целевой файл скачан — его можно продать на теневом рынке.</summary>
+    public void RegisterStolenFile(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return;
+        if (!StolenFiles.Contains(name)) StolenFiles.Add(name);
+    }
+
+    /// <summary>Продать файл; false, если такого файла нет.</summary>
+    public bool SellStolenFile(string name, int price)
+    {
+        if (!StolenFiles.Remove(name)) return false;
+        State.credits += Mathf.Max(0, price);
+        return true;
+    }
+
+    /// <summary>Кулдаун очистки логов, секунды.</summary>
+    public float LogCleanCooldown => Mathf.Max(0f, logCleanReady - Time.time);
+
+    /// <summary>Очистка логов: снимает dirtyLogs и снижает след на 10%.</summary>
+    public bool CleanLogs()
+    {
+        if (Time.time < logCleanReady) return false;
+        State.dirtyLogs = false;
+        State.suspicion = Mathf.Max(0, State.suspicion - 10);
+        logCleanReady = Time.time + 30f;
+        return true;
     }
 
     public void ShowSubtitle(string text, float seconds)

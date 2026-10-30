@@ -53,6 +53,18 @@ public class ServerDef
     }
 }
 
+public class NoteEntry
+{
+    public readonly string title;
+    public readonly string[] body;
+
+    public NoteEntry(string title, params string[] body)
+    {
+        this.title = title;
+        this.body = body;
+    }
+}
+
 /// <summary>
 /// Монитор 1 — GANDEX-OS: логин, официальные мини-игры смены и служебный терминал,
 /// через который Брик делает шаги саботажа.
@@ -62,7 +74,11 @@ public class TerminalApp
 {
     public const int StationIndex = 0;
 
-    enum Mode { Login, LoginOk, Tasks, Sort, Match, Approve, Sabotage, Locked }
+    enum Mode
+    {
+        Login, LoginOk, Desktop, Browser, Notes, OsMessenger, Logs,
+        Tasks, Sort, Match, Approve, Sabotage, Locked
+    }
 
     // цвета — из общей палитры экранов (ScreenStyle / ScreenPalette)
     static Color C => ScreenPalette.Terminal.Text;
@@ -114,12 +130,70 @@ public class TerminalApp
             new ServerFile("readme.txt", "Сервер КУПЛИНОВА. Не лезть.")),
     };
 
+    // Рабочий стол: шесть приложений.
+    static readonly string[] AppNames =
+        { "БРАУЗЕР", "ЧАТЫ", "ЗАМЕТКИ", "ЛОГИ", "РАБОТА", "ТЕРМ." };
+    static readonly string[] AppHints =
+        { "теневой интернет", "мессенджер", "заметки и лор", "след и очистка", "задачи смены", "серверы" };
+
+    static readonly NoteEntry[] Notes =
+    {
+        new NoteEntry("ГАНДЕКС · 2087",
+            "Корпорация контролирует сеть,",
+            "фильтрует запросы и пишет",
+            "доносы на неудобных людей.",
+            "Ночная смена — единственное",
+            "окно, за которым нет глаз.",
+            "Но логи помнят всё."),
+        new NoteEntry("БЕССОННИЦА",
+            "С каждой ночью опечаток",
+            "больше. Тревога растёт сама,",
+            "а при 100% сердце не выдержит.",
+            "Таблетка снижает тревогу,",
+            "сон — тоже, но крадёт время.",
+            "Не доводи до края."),
+        new NoteEntry("VOID",
+            "Вторая личность Брика.",
+            "Считает, что пустота честнее",
+            "корпорации. Просыпается после",
+            "звонка. Его сообщения могут",
+            "появиться в твоём же чате.",
+            "Не верь всему, что видишь."),
+        new NoteEntry("ДЦ-7",
+            "Дата-центр, который нужно уронить.",
+            "Три кода доступа: Джоэл, Дэлайла,",
+            "Куплинов. Файлы лежат на их",
+            "серверах. Ищи упоминания ДЦ-7",
+            "через grep, скачивай и продавай",
+            "на теневом рынке."),
+        new NoteEntry("ЧИСТЫЕ ЛОГИ",
+            "Подключение к серверу и запрос",
+            "кодов пачкают логи. Приложение",
+            "ЛОГИ снимает флаг грязных логов",
+            "и снижает след на 10%.",
+            "Делай это до проверки кибербезов.",
+            "Иначе тревога вырастет."),
+    };
+
     int connected = -1;
     string downloadFile;
     float downloadProgress;
     int downloadSpeed = 2;
     float downloadHeat;
     readonly HashSet<string> downloaded = new HashSet<string>();
+
+    int desktopSel;
+    int browserPage;       // 0 — старт, 1 — теневой рынок, 2 — справка
+    int browserSel;
+    string browserMsg = "";
+    float browserMsgUntil;
+    int noteSel;
+    int noteOpen = -1;
+    int noteScroll;
+    int osChannel;
+    int osScroll;
+    string logsMsg = "";
+    float logsMsgUntil;
 
     public bool Downloading => downloadFile != null;
     public string CurrentDownload => downloadFile;
@@ -180,12 +254,102 @@ public class TerminalApp
             case Mode.LoginOk:
                 if (enter)
                 {
-                    mode = Mode.Tasks;
-                    Flash("Смена открыта.", C);
+                    mode = Mode.Desktop;
+                    Flash("Рабочий стол загружен.", C);
+                }
+                break;
+
+            case Mode.Desktop:
+                if (Input.GetKeyDown(KeyCode.LeftArrow)) desktopSel = WrapIndex(desktopSel - 1, AppNames.Length);
+                if (Input.GetKeyDown(KeyCode.RightArrow)) desktopSel = WrapIndex(desktopSel + 1, AppNames.Length);
+                if (Input.GetKeyDown(KeyCode.UpArrow)) desktopSel = WrapIndex(desktopSel - 3, AppNames.Length);
+                if (Input.GetKeyDown(KeyCode.DownArrow)) desktopSel = WrapIndex(desktopSel + 3, AppNames.Length);
+                if (enter) OpenDesktopApp();
+                break;
+
+            case Mode.Browser:
+                if (back)
+                {
+                    if (browserPage != 0) browserPage = 0;
+                    else mode = Mode.Desktop;
+                    break;
+                }
+                if (browserPage == 0)
+                {
+                    if (Input.GetKeyDown(KeyCode.UpArrow)) browserSel = WrapIndex(browserSel - 1, 2);
+                    if (Input.GetKeyDown(KeyCode.DownArrow)) browserSel = WrapIndex(browserSel + 1, 2);
+                    if (enter)
+                    {
+                        browserPage = browserSel + 1;
+                        browserSel = 0;
+                    }
+                }
+                else if (browserPage == 1)
+                {
+                    int files = dir.StolenFiles.Count;
+                    if (files > 0)
+                    {
+                        if (Input.GetKeyDown(KeyCode.UpArrow)) browserSel = WrapIndex(browserSel - 1, files);
+                        if (Input.GetKeyDown(KeyCode.DownArrow)) browserSel = WrapIndex(browserSel + 1, files);
+                        if (enter) SellSelectedData();
+                    }
+                    else browserSel = 0;
+                }
+                else if (enter) browserPage = 0;
+                break;
+
+            case Mode.Notes:
+                if (noteOpen < 0)
+                {
+                    if (back) { mode = Mode.Desktop; break; }
+                    if (Input.GetKeyDown(KeyCode.UpArrow)) noteSel = WrapIndex(noteSel - 1, Notes.Length);
+                    if (Input.GetKeyDown(KeyCode.DownArrow)) noteSel = WrapIndex(noteSel + 1, Notes.Length);
+                    if (enter) { noteOpen = noteSel; noteScroll = 0; }
+                }
+                else
+                {
+                    if (back || enter) { noteOpen = -1; break; }
+                    if (Input.GetKeyDown(KeyCode.UpArrow)) noteScroll = Mathf.Max(0, noteScroll - 1);
+                    if (Input.GetKeyDown(KeyCode.DownArrow)) noteScroll++;
+                }
+                break;
+
+            case Mode.OsMessenger:
+                if (back) { mode = Mode.Desktop; break; }
+                if (Input.GetKeyDown(KeyCode.LeftArrow))
+                {
+                    osChannel = WrapIndex(osChannel - 1, ChatChannels.Names.Length);
+                    osScroll = 0;
+                }
+                if (Input.GetKeyDown(KeyCode.RightArrow))
+                {
+                    osChannel = WrapIndex(osChannel + 1, ChatChannels.Names.Length);
+                    osScroll = 0;
+                }
+                if (Input.GetKeyDown(KeyCode.UpArrow)) osScroll++;
+                if (Input.GetKeyDown(KeyCode.DownArrow)) osScroll = Mathf.Max(0, osScroll - 1);
+                dir.MarkRead((ChatChannel)osChannel);
+                break;
+
+            case Mode.Logs:
+                if (back) { mode = Mode.Desktop; break; }
+                if (enter)
+                {
+                    if (dir.CleanLogs())
+                    {
+                        logsMsg = "ЛОГИ ОЧИЩЕНЫ. СЛЕД: " + dir.State.suspicion + "%";
+                        logsMsgUntil = Time.time + 4f;
+                    }
+                    else
+                    {
+                        logsMsg = "КД ОЧИСТКИ: " + Mathf.CeilToInt(dir.LogCleanCooldown) + " c.";
+                        logsMsgUntil = Time.time + 2f;
+                    }
                 }
                 break;
 
             case Mode.Tasks:
+                if (back) { mode = Mode.Desktop; break; }
                 if (Input.GetKeyDown(KeyCode.UpArrow)) { selected--; WrapSel(); }
                 if (Input.GetKeyDown(KeyCode.DownArrow)) { selected++; WrapSel(); }
                 if (Input.GetKeyDown(KeyCode.T)) OpenSabotage();
@@ -217,7 +381,7 @@ public class TerminalApp
                 {
                     AbortDownload();
                     connected = -1;
-                    mode = Mode.Tasks;
+                    mode = Mode.Desktop;
                     input.Clear();
                     ResetHistoryNav();
                 }
@@ -324,7 +488,7 @@ public class TerminalApp
                 outLog.Add("ОТКЛЮЧЕНО ОТ СЕРВЕРА.");
                 while (outLog.Count > 9) outLog.RemoveAt(0);
             }
-            else mode = Mode.Tasks;
+            else mode = Mode.Desktop;
             return;
         }
         if (cmd == "help")
@@ -344,7 +508,7 @@ public class TerminalApp
                 outLog.Add("connect <код>   подключиться к серверу");
                 outLog.Add("devs --all      коды сотрудников");
                 outLog.Add("logs            состояние логов");
-                outLog.Add("clear           очистить логи (оставляет след)");
+                outLog.Add("clear           очистить логи (КД 30 с)");
                 outLog.Add("exit            выйти");
             }
         }
@@ -472,9 +636,10 @@ public class TerminalApp
         }
         else if (cmd == "clear")
         {
-            dir.State.dirtyLogs = true;
-            dir.State.suspicion = Mathf.Max(0, dir.State.suspicion - 5);
-            outLog.Add("ЛОГИ ОЧИЩЕНЫ. СЛЕД ОСТАЛСЯ: " + dir.State.suspicion + "%");
+            if (dir.CleanLogs())
+                outLog.Add("ЛОГИ ОЧИЩЕНЫ. СЛЕД: " + dir.State.suspicion + "%");
+            else
+                outLog.Add("ОЧИСТКА НЕДОСТУПНА: КД " + Mathf.CeilToInt(dir.LogCleanCooldown) + " c.");
         }
         else if (cmd == "whoami")
         {
@@ -528,6 +693,7 @@ public class TerminalApp
         outLog.Add("СКАЧАНО: " + name);
         if (file != null && file.target)
         {
+            dir.RegisterStolenFile(name);
             outLog.Add("ЦЕЛЕВОЙ ФАЙЛ ПОЛУЧЕН.");
             dir.ShowSubtitle("Данные получены: " + name, 2.5f);
         }
@@ -629,6 +795,11 @@ public class TerminalApp
         {
             case Mode.Login: RenderLogin(L); break;
             case Mode.LoginOk: RenderLoginOk(L); break;
+            case Mode.Desktop: RenderDesktop(L); break;
+            case Mode.Browser: RenderBrowser(L); break;
+            case Mode.Notes: RenderNotes(L); break;
+            case Mode.OsMessenger: RenderOsMessenger(L); break;
+            case Mode.Logs: RenderLogs(L); break;
             case Mode.Tasks: RenderTasks(L); break;
             case Mode.Sort: RenderTask(L, 0); break;
             case Mode.Match: RenderTask(L, 1); break;
@@ -675,7 +846,7 @@ public class TerminalApp
         L.Add(new ScreenLine("07:00 — конец смены. Не закрытые", Dim));
         L.Add(new ScreenLine("задачи — выговор и падение доверия.", Dim));
         L.Add(new ScreenLine("", C));
-        L.Add(new ScreenLine("[ENTER] начать смену", C));
+        L.Add(new ScreenLine("[ENTER] рабочий стол", C));
     }
 
     void RenderTasks(List<ScreenLine> L)
@@ -700,7 +871,7 @@ public class TerminalApp
         L.Add(new ScreenLine("", C));
         L.Add(new ScreenLine("СЛУЖЕБНЫЙ ТЕРМИНАЛ — [T]", Dim));
         L.Add(new ScreenLine("", C));
-        L.Add(new ScreenLine("[↑↓] выбрать   [ENTER] открыть", Dim));
+        L.Add(new ScreenLine("[↑↓] выбрать   [ENTER] открыть   [CTRL+C] стол", Dim));
     }
 
     void RenderTask(List<ScreenLine> L, int kindIndex)
@@ -769,7 +940,252 @@ public class TerminalApp
         }
         else
         {
-            L.Add(new ScreenLine("[connect <код>]  [exit]/[CTRL+C] назад", Dim));
+            L.Add(new ScreenLine("[connect <код>]  [exit]/[CTRL+C] стол", Dim));
         }
+    }
+
+    // ------------------------------------------------------------ рабочий стол и приложения
+
+    void RenderDesktop(List<ScreenLine> L)
+    {
+        L.Add(new ScreenLine(
+            "ТРЕВОГА " + Mathf.RoundToInt(dir.State.anxiety) + "%" +
+            "   СЛЕД " + dir.State.suspicion + "%" +
+            "   КР " + dir.State.credits +
+            "   ЛОГИ: " + (dir.State.dirtyLogs ? "ГРЯЗНЫЕ" : "ЧИСТО"),
+            dir.State.dirtyLogs ? Warn : Dim));
+
+        int tileW = Mathf.Max(12, (s.Cols - 2) / 3);
+        string top = "┌" + new string('─', tileW - 2) + "┐";
+        string bot = "└" + new string('─', tileW - 2) + "┘";
+
+        for (int row = 0; row < 2; row++)
+        {
+            L.Add(new ScreenLine(top + " " + top + " " + top, Lines));
+
+            string mid = "";
+            for (int col = 0; col < 3; col++)
+            {
+                int i = row * 3 + col;
+                mid += "│" + Pad((desktopSel == i ? "▸ " : "  ") + AppNames[i], tileW - 2) + "│";
+                if (col < 2) mid += " ";
+            }
+            L.Add(new ScreenLine(mid, (desktopSel / 3) == row ? White : C));
+
+            L.Add(new ScreenLine(bot + " " + bot + " " + bot, Lines));
+        }
+
+        L.Add(new ScreenLine("▸ " + AppNames[desktopSel] + " — " + AppHints[desktopSel], White));
+        L.Add(new ScreenLine("↑↓←→ — выбор   ENTER — открыть", Dim));
+    }
+
+    void RenderBrowser(List<ScreenLine> L)
+    {
+        if (browserPage == 0)
+        {
+            L.Add(new ScreenLine("БРАУЗЕР · GANDEX NET", White));
+            L.Add(new ScreenLine("", C));
+            L.Add(new ScreenLine((browserSel == 0 ? "▸ " : "  ") + "[1] ТЕНЕВОЙ РЫНОК",
+                                 browserSel == 0 ? White : C));
+            L.Add(new ScreenLine((browserSel == 1 ? "▸ " : "  ") + "[2] КАК ЭТО РАБОТАЕТ",
+                                 browserSel == 1 ? White : C));
+            L.Add(new ScreenLine("", C));
+            L.Add(new ScreenLine("ENTER — открыть   CTRL+C — назад", Dim));
+            return;
+        }
+
+        if (browserPage == 1)
+        {
+            L.Add(new ScreenLine("БРАУЗЕР · ТЕНЕВОЙ РЫНОК   КР " + dir.State.credits, White));
+            L.Add(new ScreenLine("", C));
+
+            int n = dir.StolenFiles.Count;
+            if (n == 0)
+            {
+                L.Add(new ScreenLine("НЕТ ДАННЫХ НА ПРОДАЖУ.", Dim));
+                L.Add(new ScreenLine("Скачайте целевые файлы через ТЕРМ.", Dim));
+            }
+            else
+            {
+                int maxRows = Mathf.Max(1, s.Rows - 6);
+                int start = Mathf.Max(0, browserSel - maxRows + 1);
+                for (int i = start; i < n && i < start + maxRows; i++)
+                {
+                    string name = dir.StolenFiles[i];
+                    string line = (i == browserSel ? "▸ " : "  ") + name +
+                                  "   " + MarketPrice(name) + " кр.";
+                    L.Add(new ScreenLine(line, i == browserSel ? White : C));
+                }
+            }
+
+            if (!string.IsNullOrEmpty(browserMsg) && Time.time < browserMsgUntil)
+                L.Add(new ScreenLine(browserMsg, C));
+            else
+                L.Add(new ScreenLine("", C));
+            L.Add(new ScreenLine("ENTER — продать   CTRL+C — назад", Dim));
+            return;
+        }
+
+        L.Add(new ScreenLine("БРАУЗЕР · КАК ЭТО РАБОТАЕТ", White));
+        L.Add(new ScreenLine("", C));
+        L.Add(new ScreenLine("1. ТЕРМ. → connect <код>", C));
+        L.Add(new ScreenLine("2. grep \"дц-7\" → целевой файл", C));
+        L.Add(new ScreenLine("3. download <файл>", C));
+        L.Add(new ScreenLine("4. Здесь продайте данные.", C));
+        L.Add(new ScreenLine("", C));
+        L.Add(new ScreenLine("Скорость выше 2 увеличивает след.", Dim));
+        L.Add(new ScreenLine("Не попадитесь на проверке.", Dim));
+        L.Add(new ScreenLine("ENTER / CTRL+C — назад", Dim));
+    }
+
+    void RenderNotes(List<ScreenLine> L)
+    {
+        if (noteOpen < 0)
+        {
+            L.Add(new ScreenLine("ЗАМЕТКИ", White));
+            L.Add(new ScreenLine("", C));
+            for (int i = 0; i < Notes.Length; i++)
+                L.Add(new ScreenLine((i == noteSel ? "▸ " : "  ") + Notes[i].title,
+                                     i == noteSel ? White : C));
+            L.Add(new ScreenLine("", C));
+            L.Add(new ScreenLine("↑↓ выбор   ENTER открыть   CTRL+C стол", Dim));
+            return;
+        }
+
+        NoteEntry note = Notes[Mathf.Clamp(noteOpen, 0, Notes.Length - 1)];
+        L.Add(new ScreenLine(note.title, White));
+        L.Add(new ScreenLine("", C));
+
+        int maxRows = Mathf.Max(1, s.Rows - 6);
+        int maxScroll = Mathf.Max(0, note.body.Length - maxRows);
+        noteScroll = Mathf.Clamp(noteScroll, 0, maxScroll);
+        for (int i = noteScroll; i < note.body.Length && i < noteScroll + maxRows; i++)
+            L.Add(new ScreenLine(note.body[i], C));
+
+        L.Add(new ScreenLine("", C));
+        L.Add(new ScreenLine("↑↓ прокрутка   ENTER/CTRL+C назад", Dim));
+    }
+
+    void RenderOsMessenger(List<ScreenLine> L)
+    {
+        L.Add(new ScreenLine("ЧАТЫ · КОРПОРАТИВНЫЙ МЕССЕНДЖЕР", White));
+
+        string tabs = "";
+        for (int i = 0; i < ChatChannels.Names.Length; i++)
+        {
+            string name = ChatChannels.Names[i];
+            if (i < dir.Unread.Length && dir.Unread[i]) name += "*";
+            tabs += (i == osChannel ? "▸" : " ") + name + (i == osChannel ? "◂ " : "  ");
+        }
+        L.Add(new ScreenLine(tabs, White));
+        L.Add(new ScreenLine(new string('─', s.Cols), Lines));
+
+        var feed = new List<ChatMessage>();
+        for (int i = 0; i < dir.Messages.Count; i++)
+            if ((int)dir.Messages[i].channel == osChannel)
+                feed.Add(dir.Messages[i]);
+
+        int maxRows = Mathf.Max(1, s.Rows - 7);
+        int maxScroll = Mathf.Max(0, feed.Count - maxRows);
+        osScroll = Mathf.Clamp(osScroll, 0, maxScroll);
+        int start = Mathf.Max(0, feed.Count - maxRows - osScroll);
+        for (int i = start; i < feed.Count && i < start + maxRows; i++)
+        {
+            ChatMessage m = feed[i];
+            string line = m.time + " " + m.sender + ": " + m.text;
+            L.Add(new ScreenLine(line, i == feed.Count - 1 ? White : C));
+        }
+
+        L.Add(new ScreenLine("", C));
+        L.Add(new ScreenLine("←→ каналы   ↑↓ прокрутка   CTRL+C стол", Dim));
+    }
+
+    void RenderLogs(List<ScreenLine> L)
+    {
+        float cd = dir.LogCleanCooldown;
+        L.Add(new ScreenLine("ЛОГИ · СЛЕД " + dir.State.suspicion + "%   КИБЕРБЕЗЫ " + dir.CyberCdText,
+                             dir.CyberDanger ? Err : Warn));
+        L.Add(new ScreenLine("СОСТОЯНИЕ: " + (dir.State.dirtyLogs ? "ГРЯЗНЫЕ" : "ЧИСТО") +
+                             "   ОЧИСТКА: " + (cd > 0f ? Mathf.CeilToInt(cd) + " c" : "ГОТОВО"),
+                             dir.State.dirtyLogs ? Warn : C));
+        L.Add(new ScreenLine(new string('─', s.Cols), Lines));
+        L.Add(new ScreenLine("Очистка снимает флаг грязных логов", C));
+        L.Add(new ScreenLine("и снижает след на 10%. Пока логи", C));
+        L.Add(new ScreenLine("чистые, проверка не поднимает тревогу.", C));
+        L.Add(new ScreenLine("[ENTER] ОЧИСТИТЬ ЛОГИ", cd > 0f ? Dim : White));
+        if (!string.IsNullOrEmpty(logsMsg) && Time.time < logsMsgUntil)
+            L.Add(new ScreenLine(logsMsg, C));
+        L.Add(new ScreenLine("CTRL+C — назад", Dim));
+    }
+
+    void OpenDesktopApp()
+    {
+        switch (desktopSel)
+        {
+            case 0:
+                mode = Mode.Browser;
+                browserPage = 0;
+                browserSel = 0;
+                break;
+            case 1:
+                mode = Mode.OsMessenger;
+                osChannel = 0;
+                osScroll = 0;
+                break;
+            case 2:
+                mode = Mode.Notes;
+                noteOpen = -1;
+                noteSel = 0;
+                noteScroll = 0;
+                break;
+            case 3:
+                mode = Mode.Logs;
+                logsMsg = "";
+                break;
+            case 4:
+                mode = Mode.Tasks;
+                selected = 0;
+                break;
+            case 5:
+                OpenSabotage();
+                break;
+        }
+    }
+
+    void SellSelectedData()
+    {
+        if (browserSel < 0 || browserSel >= dir.StolenFiles.Count) return;
+        string name = dir.StolenFiles[browserSel];
+        int price = MarketPrice(name);
+        if (!dir.SellStolenFile(name, price)) return;
+
+        browserMsg = "ПРОДАНО: " + name + "  +" + price + " кр.";
+        browserMsgUntil = Time.time + 3f;
+        browserSel = Mathf.Clamp(browserSel, 0, Mathf.Max(0, dir.StolenFiles.Count - 1));
+    }
+
+    static int MarketPrice(string name)
+    {
+        switch (name)
+        {
+            case "dc7_route.log": return 120;
+            case "dc7_backup.key": return 200;
+            case "dc7_final.key": return 350;
+            default: return 50;
+        }
+    }
+
+    static string Pad(string text, int width)
+    {
+        if (width <= 0) return "";
+        if (text == null) text = "";
+        if (text.Length >= width) return text.Substring(0, width);
+        return text + new string(' ', width - text.Length);
+    }
+
+    static int WrapIndex(int value, int count)
+    {
+        if (count <= 0) return 0;
+        return ((value % count) + count) % count;
     }
 }

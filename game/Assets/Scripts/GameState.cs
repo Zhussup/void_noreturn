@@ -34,6 +34,9 @@ public class GameState
     public int tasksDone;
     public int[] trust = new int[3]; // Джоэл, Дэлайла, Куплинов
 
+    [Header("Теневой рынок")]
+    public int credits;            // выручка за проданные данные
+
     public void ResetForNight(int index)
     {
         night = Mathf.Clamp(index, 1, 5);
