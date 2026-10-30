@@ -10,12 +10,13 @@ public class MessengerApp
 {
     public const int StationIndex = 1;
 
-    static readonly Color C = new Color(0.72f, 0.82f, 0.76f);
-    static readonly Color Dim = new Color(0.40f, 0.48f, 0.44f);
-    static readonly Color Accent = new Color(0.62f, 0.70f, 1f);
-    static readonly Color Warn = new Color(1f, 0.76f, 0.29f);
-    static readonly Color Err = new Color(1f, 0.36f, 0.36f);
-    static readonly Color White = new Color(0.92f, 0.97f, 0.94f);
+    // цвета — из общей палитры экранов (ScreenStyle / ScreenPalette)
+    static Color C => ScreenPalette.Messenger.Text;
+    static Color Dim => ScreenPalette.Messenger.Dim;
+    static Color Accent => ScreenPalette.Messenger.Accent;
+    static Color Warn => ScreenPalette.Messenger.Warn;
+    static Color Err => ScreenPalette.Messenger.Alarm;
+    static Color White => ScreenPalette.Messenger.Bright;
 
     readonly NightDirector dir;
     readonly ScreenSurface s;
