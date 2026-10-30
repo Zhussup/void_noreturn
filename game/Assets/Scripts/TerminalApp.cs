@@ -57,10 +57,15 @@ public class TerminalApp
 
     public bool LoggedIn { get; private set; }
 
+    /// <summary>Задача, открытая сейчас (или выбранная в списке).</summary>
+    TaskDef CurrentTask =>
+        selected >= 0 && selected < dir.Tasks.Count ? dir.Tasks[selected] : null;
+
     /// <summary>Сейчас приложение ждёт текст: буква E — часть ввода, не приближение.</summary>
     public bool CapturingInput =>
-        mode == Mode.Login || mode == Mode.Sort || mode == Mode.Match ||
-        mode == Mode.Approve || mode == Mode.Sabotage;
+        mode == Mode.Login || mode == Mode.Sabotage ||
+        ((mode == Mode.Sort || mode == Mode.Match || mode == Mode.Approve) &&
+         CurrentTask != null && !CurrentTask.done);
 
     public TerminalApp(NightDirector dir, ScreenSurface surface)
     {
@@ -108,6 +113,12 @@ public class TerminalApp
             case Mode.Sort:
             case Mode.Match:
             case Mode.Approve:
+                // Выполненную задачу можно открыть и прочитать, но не сдать заново.
+                if (CurrentTask != null && CurrentTask.done)
+                {
+                    if (back) { mode = Mode.Tasks; input.Clear(); }
+                    break;
+                }
                 input.Tick(dir.TypoChance);
                 if (back) { mode = Mode.Tasks; input.Clear(); }
                 else if (enter) SubmitTask();
@@ -157,7 +168,6 @@ public class TerminalApp
     {
         if (selected < 0 || selected >= dir.Tasks.Count) return;
         TaskDef t = dir.Tasks[selected];
-        if (t.done) { Flash("Задача уже закрыта.", Dim); return; }
         input.Clear();
         mode = t.kind == TaskKind.Sort ? Mode.Sort
              : t.kind == TaskKind.Match ? Mode.Match
@@ -168,6 +178,7 @@ public class TerminalApp
     {
         if (selected < 0 || selected >= dir.Tasks.Count) return;
         TaskDef t = dir.Tasks[selected];
+        if (t.done) return; // закрытую задачу только читаем
         string answer = input.text.Trim();
         input.Clear();
 
@@ -426,6 +437,16 @@ public class TerminalApp
         }
         L.Add(new ScreenLine("", C));
         L.Add(new ScreenLine(t.prompt, Warn));
+
+        if (t.done)
+        {
+            // Закрытая задача открывается только для чтения.
+            L.Add(new ScreenLine("ВЫПОЛНЕНО.", Dim));
+            L.Add(new ScreenLine("", C));
+            L.Add(new ScreenLine("[CTRL+C] назад", Dim));
+            return;
+        }
+
         string shown = input.RejectedRecently
             ? "> " + input.text + " ▌"
             : "> " + input.text + (Time.time % 1f < 0.55f ? "_" : " ");
