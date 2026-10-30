@@ -18,6 +18,7 @@ public class OverlayUI : MonoBehaviour
     GUIStyle hudText, hudWarn, hudBad;
     float styledScale = -1f;
     float styledTypeInScale = -1f;
+    int styledHeight = -1;
 
     public void Init(NightDirector director, Font uiFont)
     {
@@ -48,10 +49,12 @@ public class OverlayUI : MonoBehaviour
     {
         float s = dir != null ? dir.UiScale : 1f;
         float ti = dir != null ? dir.TypeInScale : 1f;
+        int sh = Screen.height;
         if (center != null && Mathf.Abs(styledScale - s) < 0.0001f &&
-            Mathf.Abs(styledTypeInScale - ti) < 0.0001f) return;
+            Mathf.Abs(styledTypeInScale - ti) < 0.0001f && styledHeight == sh) return;
         styledScale = s;
         styledTypeInScale = ti;
+        styledHeight = sh; // после смены размера Game view шрифты пересобираются
 
         center = new GUIStyle(GUI.skin.label);
         center.font = font;
@@ -61,12 +64,13 @@ public class OverlayUI : MonoBehaviour
         center.normal.textColor = Color.white;
 
         title = new GUIStyle(center);
-        title.fontSize = Mathf.RoundToInt(Screen.height * 0.052f * s);
+        title.fontSize = Mathf.Max(28, Mathf.RoundToInt(Screen.height * 0.052f * s));
         title.normal.textColor = new Color(0.90f, 0.96f, 0.92f);
 
         endStyle = new GUIStyle(center);
-        endStyle.fontSize = Mathf.RoundToInt(Screen.height * 0.021f * s);
-        endStyle.normal.textColor = new Color(0.80f, 0.86f, 0.82f);
+        endStyle.fontSize = Mathf.Max(16, Mathf.RoundToInt(Screen.height * 0.026f * s));
+        endStyle.wordWrap = true;
+        endStyle.normal.textColor = new Color(0.88f, 0.93f, 0.90f);
 
         callName = new GUIStyle(center);
         callName.fontSize = Mathf.RoundToInt(Screen.height * 0.019f * s);
@@ -517,7 +521,15 @@ public class OverlayUI : MonoBehaviour
         for (int i = 0; i < dir.EndLines.Length; i++)
             body += dir.EndLines[i] + (i + 1 < dir.EndLines.Length ? "\n" : "");
 
-        GUI.Label(new Rect(w * 0.12f, h * 0.29f, w * 0.76f, h * 0.58f), body, endStyle);
+        // Если строк много или UI-масштаб крупный — уменьшаем кегль ровно
+        // настолько, чтобы весь отчёт поместился, но не мельче читаемого.
+        int lines = Mathf.Max(1, dir.EndLines.Length);
+        int maxFont = Mathf.Max(12, Mathf.FloorToInt(h * 0.56f / (lines * 1.2f)));
+        var bodyStyle = new GUIStyle(endStyle);
+        bodyStyle.fontSize = Mathf.Min(endStyle.fontSize, maxFont);
+        bodyStyle.wordWrap = true;
+
+        GUI.Label(new Rect(w * 0.10f, h * 0.27f, w * 0.80f, h * 0.62f), body, bodyStyle);
     }
 
     void DrawBand(Rect r, float alpha)
