@@ -199,7 +199,8 @@ public class OverlayUI : MonoBehaviour
         float lineH = hudText.lineHeight + 3f * s;
         float pad = 10f * s;
         float panelW = Mathf.Min(260f * s, w * 0.42f);
-        float panelH = pad * 2f + lineH * 6f + 18f * s;
+        bool downloading = dir.TerminalDownloading;
+        float panelH = pad * 2f + lineH * (downloading ? 7f : 6f) + 18f * s;
 
         var panel = new Rect(16f * s - pad, 16f * s - pad, panelW, panelH);
         DrawSolid(panel, new Color(0.02f, 0.03f, 0.025f, 0.55f));
@@ -244,6 +245,13 @@ public class OverlayUI : MonoBehaviour
         GUI.Label(new Rect(x, y, textW, lineH),
                   "КИБЕРБЕЗЫ  " + dir.CyberCdText,
                   dir.CyberDanger ? hudBad : hudText);
+
+        if (downloading)
+        {
+            y += lineH;
+            GUI.Label(new Rect(x, y, textW, lineH),
+                      "ЗАГРУЗКА  " + dir.TerminalDownloadText, hudWarn);
+        }
     }
 
     void DrawBar(Rect r, float fill, Color color)

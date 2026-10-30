@@ -102,9 +102,14 @@ public class NightDirector : MonoBehaviour
     public bool CallAwaitingAnswer => callStage == 0;
     public bool CallTypo => callField.RejectedRecently;
 
+    /// <summary>Идёт загрузка файла с сервера сотрудника (для HUD и проверки кибербезов).</summary>
+    public bool TerminalDownloading => terminal != null && terminal.Downloading;
+    public string TerminalDownloadText => terminal != null ? terminal.DownloadStatus : "";
+
     // ------------------------------------------------------------ внутреннее
 
     ModalKind modal = ModalKind.Intro;
+    static int retryNight = 1; // какая ночь перезапустится после R
     float introStart;
     const float IntroDuration = 2.8f;
     bool settingsPrevInput;
@@ -155,8 +160,10 @@ public class NightDirector : MonoBehaviour
 
     void Start()
     {
+        int night = Mathf.Clamp(retryNight, 1, 5);
+        retryNight = 1;
         State = GameState.NewGame();
-        State.ResetForNight(1);
+        State.ResetForNight(night);
         Clock.Reset();
 
         Player = FindAnyObjectByType<PlayerController>();
@@ -184,7 +191,7 @@ public class NightDirector : MonoBehaviour
         ActiveStation = StationTerminal;
         introStart = Time.time;
         IntroAlpha = 1f;
-        Debug.Log("[VNR] Entry point: NightDirector.Start · объект Game · Assets/Scenes/Office.unity");
+        Debug.Log("[VNR] Entry point: NightDirector.Start · объект Game · Assets/Scenes/Office.unity · ночь " + night);
     }
 
     /// <summary>ENTRY POINT смены: интро закончилось, управление отдано игроку.</summary>
@@ -280,6 +287,21 @@ public class NightDirector : MonoBehaviour
     void BuildTasks()
     {
         Tasks.Clear();
+
+        // Мини-задача в начале смены: засвечивает коды сотрудников.
+        TaskDef profiles = new TaskDef(
+            TaskKind.Match,
+            "СВЕРКА ПРОФИЛЕЙ",
+            "ВВЕДИТЕ ID:",
+            "A-4471",
+            "ФРАГМЕНТ: «Л. Дэлайла, ДИУ-2»",
+            "КАНДИДАТЫ (коды доступа):",
+            "  A-4471  Л. ДЭЛАЙЛА   код a-4471",
+            "  A-5120  Д. ДЖОЭЛ     код a-5120",
+            "  A-6643  К. КУПЛИНОВ  код a-6643");
+        profiles.revealsCodes = true;
+        Tasks.Add(profiles);
+
         Tasks.Add(new TaskDef(
             TaskKind.Sort,
             "СОРТИРОВКА ПОСТОВ",
@@ -289,17 +311,6 @@ public class NightDirector : MonoBehaviour
             "«В поезде №14 нашли сумку без хозяина.",
             " Внутри — документы и старый телефон.»",
             "ПРИМЕЧАНИЕ: упоминание ДЦ-7?"));
-
-        Tasks.Add(new TaskDef(
-            TaskKind.Match,
-            "СВЕРКА ПРОФИЛЕЙ",
-            "ВВЕДИТЕ ID:",
-            "A-4471",
-            "ФРАГМЕНТ: «Л. Дэлайла, ДИУ-2»",
-            "КАНДИДАТЫ:",
-            "  A-4471  Л. ДЭЛАЙЛА",
-            "  A-5120  Д. ДЖОЭЛ",
-            "  A-6634  К. КУПЛИНОВ"));
 
         Tasks.Add(new TaskDef(
             TaskKind.Approve,
@@ -499,6 +510,8 @@ public class NightDirector : MonoBehaviour
         if (timeRuns)
         {
             Clock.Tick(Time.deltaTime);
+            // Загрузка идёт даже вне терминала: за ней надо следить.
+            if (terminal != null) terminal.TickDownload(Time.deltaTime);
             TickCyberbez(Time.deltaTime);
             TickEvents();
             TickAnxiety(Time.deltaTime);
@@ -639,6 +652,21 @@ public class NightDirector : MonoBehaviour
         if (cyberCd <= 0f)
         {
             cyberCd = 280f;
+
+            // Застукали за скачиванием — ловят сразу.
+            if (terminal != null && terminal.Downloading)
+            {
+                string file = terminal.CurrentDownload;
+                terminal.AbortDownload();
+                AddChat(ChatChannel.Security, "КИБЕРБЕЗОПАСНОСТЬ",
+                    "ОБНАРУЖЕНА УТЕЧКА. ИСТОЧНИК: " + file + ".", Clock.Display);
+                StartCaught(
+                    "Во время проверки кибербезов вы скачивали файл \"" + file + "\". " +
+                    "Нужно было остановить загрузку командой stop или дождаться её окончания " +
+                    "до нуля таймера проверки.");
+                return;
+            }
+
             // Плановая проверка: грязные логи бьют по тревоге.
             if (State.dirtyLogs)
             {
@@ -1067,6 +1095,7 @@ public class NightDirector : MonoBehaviour
     void StartDeath()
     {
         if (modal == ModalKind.Death) return;
+        retryNight = State.night;
         if (ringSource != null) ringSource.Stop();
         phone = PhoneState.Idle;
         modal = ModalKind.Death;
@@ -1085,6 +1114,7 @@ public class NightDirector : MonoBehaviour
     void StartCyberDeath()
     {
         if (modal == ModalKind.Death) return;
+        retryNight = State.night;
         if (ringSource != null) ringSource.Stop();
         phone = PhoneState.Idle;
         modal = ModalKind.Death;
@@ -1097,6 +1127,27 @@ public class NightDirector : MonoBehaviour
             "Кибербезы дошли до адреса.",
             "Вы ещё успели допечатать.",
             "",
+            "R — начать ночь заново",
+        };
+    }
+
+    /// <summary>Поймали на скачивании: экран ошибки и перезапуск текущей (последней) ночи.</summary>
+    void StartCaught(string reason)
+    {
+        if (modal == ModalKind.Death || modal == ModalKind.End) return;
+        retryNight = State.night;
+        if (ringSource != null) ringSource.Stop();
+        phone = PhoneState.Idle;
+        modal = ModalKind.Death;
+        Running = false;
+        Clock.running = false;
+        if (Player != null) Player.inputEnabled = false;
+        EndTitle = "ВЫ СОВЕРШИЛИ ОШИБКУ";
+        EndLines = new[]
+        {
+            reason,
+            "",
+            "Вас поймали кибербезы.",
             "R — начать ночь заново",
         };
     }

@@ -22,6 +22,9 @@ public class GameState
     [Header("Прогресс саботажа")]
     public int planStep;           // 0 — разведка не сделана, 1 — ДЦ-7 найден
     public int suspicion;          // 0..100, кибербезы
+
+    // Индексы совпадают с trust: 0 — Джоэл, 1 — Дэлайла, 2 — Куплинов.
+    public static readonly string[] EmployeeCodes = { "a-5120", "a-4471", "a-6643" };
     public bool dirtyLogs;         // в логах остались следы Брика
     public int traces;             // следы Брика (ночь 4)
     public bool[] codes = new bool[3];
