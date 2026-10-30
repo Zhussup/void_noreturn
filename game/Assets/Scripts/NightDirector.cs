@@ -224,7 +224,7 @@ public class NightDirector : MonoBehaviour
     const float RefCharSize = 0.00064f;
     const float RefLineHeight = 0.0115f;
     const float LineSpacingBoost = 1.12f; // чуть больше воздуха между строками
-    const float OsTextScale = 0.85f;      // текст ОС мельче, монитор — больше
+    const float OsTextScale = 0.72f;      // текст ОС заметно мельче, монитор — больше
 
     /// <summary>Кегль и шаг строк под физическую высоту экрана.</summary>
     static void TextMetrics(Transform screen, out float charSize, out float lineHeight)
