@@ -68,11 +68,11 @@ namespace VNR.EditorTools
 
         static void RemoveAllCameras()
         {
-            Camera[] cameras = Object.FindObjectsByType<Camera>(FindObjectsSortMode.None);
+            Camera[] cameras = Object.FindObjectsByType<Camera>();
             for (int i = 0; i < cameras.Length; i++)
                 if (cameras[i] != null) Object.DestroyImmediate(cameras[i].gameObject);
 
-            AudioListener[] listeners = Object.FindObjectsByType<AudioListener>(FindObjectsSortMode.None);
+            AudioListener[] listeners = Object.FindObjectsByType<AudioListener>();
             for (int i = 0; i < listeners.Length; i++)
                 if (listeners[i] != null) Object.DestroyImmediate(listeners[i].gameObject);
         }

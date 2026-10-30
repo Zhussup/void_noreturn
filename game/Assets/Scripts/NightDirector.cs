@@ -17,7 +17,8 @@ public class NightDirector : MonoBehaviour
     public const int StationBed = 3;
 
     public GameState State;
-    public GameClock Clock = new GameClock();
+    // Часы — рантайм-состояние: в сцене не храним, поэтому вне сериализации.
+    [System.NonSerialized] public GameClock Clock = new GameClock();
     public readonly List<TaskDef> Tasks = new List<TaskDef>();
     public readonly List<ChatMessage> Messages = new List<ChatMessage>();
     public readonly bool[] Unread = new bool[4];
@@ -40,6 +41,18 @@ public class NightDirector : MonoBehaviour
     public int UiScaleIndex { get; private set; } = 2;
     public float UiScale =>
         UiScaleSteps[Mathf.Clamp(UiScaleIndex, 0, UiScaleSteps.Length - 1)];
+
+    /// <summary>Размер того, что игрок печатает: подсказка действия и ответ на звонок.</summary>
+    public static readonly float[] TypeInScaleSteps = { 0.8f, 1.0f, 1.2f, 1.4f, 1.6f };
+    const string TypeInScalePref = "vnr.typeInScaleIndex";
+
+    /// <summary>Множитель к базовому кеглю печатаемого текста; 1.0 — как было.</summary>
+    public int TypeInScaleIndex { get; private set; } = 1;
+    public float TypeInScale =>
+        TypeInScaleSteps[Mathf.Clamp(TypeInScaleIndex, 0, TypeInScaleSteps.Length - 1)];
+
+    /// <summary>Выбранная строка настроек: 0 — интерфейс, 1 — текст ввода.</summary>
+    public int SettingsRow { get; private set; }
 
     /// <summary>Приложение принимает текст: E отдаётся ему, а не приближению монитора.</summary>
     public bool TextInputActive =>
@@ -141,6 +154,8 @@ public class NightDirector : MonoBehaviour
 
         UiScaleIndex = Mathf.Clamp(PlayerPrefs.GetInt(UiScalePref, UiScaleIndex),
                                    0, UiScaleSteps.Length - 1);
+        TypeInScaleIndex = Mathf.Clamp(PlayerPrefs.GetInt(TypeInScalePref, TypeInScaleIndex),
+                                       0, TypeInScaleSteps.Length - 1);
 
         if (Player != null)
         {
@@ -524,9 +539,27 @@ public class NightDirector : MonoBehaviour
         ApplyTextScale(); // текст на мониторах перестраивается сразу
     }
 
+    /// <summary>Выбрать шаг размера печатаемого текста (карточка в настройках).</summary>
+    public void SetTypeInScale(int index)
+    {
+        int next = Mathf.Clamp(index, 0, TypeInScaleSteps.Length - 1);
+        if (next == TypeInScaleIndex) return;
+
+        TypeInScaleIndex = next;
+        PlayerPrefs.SetInt(TypeInScalePref, TypeInScaleIndex);
+        PlayerPrefs.Save();
+    }
+
+    /// <summary>Строка настроек, которую сейчас крутят стрелками.</summary>
+    public void SelectSettingsRow(int row)
+    {
+        SettingsRow = Mathf.Clamp(row, 0, 1);
+    }
+
     void OpenSettings()
     {
         settingsPrevInput = Player != null && Player.inputEnabled;
+        SettingsRow = 0;
         modal = ModalKind.Settings;
         if (Player == null) return;
         Player.inputEnabled = false;   // станции и действия ждут
@@ -543,13 +576,16 @@ public class NightDirector : MonoBehaviour
 
     void HandleSettingsInput()
     {
-        if (Input.GetKeyDown(KeyCode.LeftArrow)) AdjustUiScale(-1);
-        if (Input.GetKeyDown(KeyCode.RightArrow)) AdjustUiScale(1);
+        if (Input.GetKeyDown(KeyCode.UpArrow)) SelectSettingsRow(SettingsRow - 1);
+        if (Input.GetKeyDown(KeyCode.DownArrow)) SelectSettingsRow(SettingsRow + 1);
+        if (Input.GetKeyDown(KeyCode.LeftArrow)) AdjustSetting(-1);
+        if (Input.GetKeyDown(KeyCode.RightArrow)) AdjustSetting(1);
     }
 
-    void AdjustUiScale(int delta)
+    void AdjustSetting(int delta)
     {
-        SetUiScale(UiScaleIndex + delta);
+        if (SettingsRow == 0) SetUiScale(UiScaleIndex + delta);
+        else SetTypeInScale(TypeInScaleIndex + delta);
     }
 
     /// <summary>Отсчёт до звонка шефа после успешного входа в терминал.</summary>

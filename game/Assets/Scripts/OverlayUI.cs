@@ -16,6 +16,7 @@ public class OverlayUI : MonoBehaviour
     GUIStyle center, title, endStyle, callName, callLine, callInput, hintStyle, subtitleStyle;
     GUIStyle actionGray, actionTyped, actionError, settingsTitle, settingsOption, settingsValue;
     float styledScale = -1f;
+    float styledTypeInScale = -1f;
 
     public void Init(NightDirector director, Font uiFont)
     {
@@ -45,8 +46,11 @@ public class OverlayUI : MonoBehaviour
     void EnsureStyles()
     {
         float s = dir != null ? dir.UiScale : 1f;
-        if (center != null && Mathf.Abs(styledScale - s) < 0.0001f) return;
+        float ti = dir != null ? dir.TypeInScale : 1f;
+        if (center != null && Mathf.Abs(styledScale - s) < 0.0001f &&
+            Mathf.Abs(styledTypeInScale - ti) < 0.0001f) return;
         styledScale = s;
+        styledTypeInScale = ti;
 
         center = new GUIStyle(GUI.skin.label);
         center.font = font;
@@ -74,7 +78,7 @@ public class OverlayUI : MonoBehaviour
         callLine.normal.textColor = new Color(0.90f, 0.93f, 0.90f);
 
         callInput = new GUIStyle(center);
-        callInput.fontSize = Mathf.RoundToInt(Screen.height * 0.021f * s);
+        callInput.fontSize = Mathf.RoundToInt(Screen.height * 0.021f * s * ti);
         callInput.alignment = TextAnchor.MiddleLeft;
         callInput.normal.textColor = Color.white;
 
@@ -88,7 +92,7 @@ public class OverlayUI : MonoBehaviour
 
         actionGray = new GUIStyle(center);
         // Подпись действия читается поверх мира с рабочего места — крупнее прочего текста.
-        actionGray.fontSize = Mathf.RoundToInt(Screen.height * 0.036f * s);
+        actionGray.fontSize = Mathf.RoundToInt(Screen.height * 0.036f * s * ti);
         actionGray.alignment = TextAnchor.MiddleLeft;
         actionGray.wordWrap = false;
         actionGray.normal.textColor = new Color(0.55f, 0.57f, 0.55f, 0.95f);
@@ -269,7 +273,8 @@ public class OverlayUI : MonoBehaviour
         {
             string shown = "ОТВЕТ: " + dir.CallAnswer +
                            (dir.CallTypo ? " ▌" : (Time.time % 1f < 0.55f ? "_" : " "));
-            var inR = new Rect(band.x + 24f * s, band.y + 104f * s, band.width - 48f * s, 34f * s);
+            float inputH = Mathf.Max(34f * s, callInput.lineHeight);
+            var inR = new Rect(band.x + 24f * s, band.y + 104f * s, band.width - 48f * s, inputH);
             GUI.Label(inR, shown, dir.CallTypo
                 ? Tinted(callInput, new Color(1f, 0.36f, 0.36f))
                 : callInput);
@@ -300,27 +305,19 @@ public class OverlayUI : MonoBehaviour
 
         // Габариты вариантов считаем заранее, чтобы панель была по содержимому,
         // а не растянутой на пол-экрана.
-        int n = NightDirector.UiScaleSteps.Length;
-        var widths = new float[n];
-        var labels = new string[n];
-        float cardsW = 0f;
         float cardH = settingsOption.lineHeight + 16f * s;
-
-        for (int i = 0; i < n; i++)
-        {
-            labels[i] = Mathf.RoundToInt(NightDirector.UiScaleSteps[i] * 100f) + "%";
-            widths[i] = Mathf.Max(cardH * 1.7f,
-                settingsOption.CalcSize(new GUIContent(labels[i])).x + 22f * s);
-            cardsW += widths[i];
-        }
-        cardsW += gap * (n - 1);
+        float[] uiWidths = ScaleCardWidths(NightDirector.UiScaleSteps, cardH, s);
+        float[] typeWidths = ScaleCardWidths(NightDirector.TypeInScaleSteps, cardH, s);
+        float uiW = CardsWidth(uiWidths, gap);
+        float typeW = CardsWidth(typeWidths, gap);
 
         float titleH = settingsTitle.lineHeight;
         float hintH = hintStyle.lineHeight;
+        float rowH = hintH + 8f * s + cardH + 6f * s + hintH;
         float contentH = titleH + 8f * s + Mathf.Max(1f, s) + 18f * s
-                       + hintH + 12f * s + cardH + 20f * s + hintH;
+                       + rowH + 18f * s + rowH;
 
-        float pw = Mathf.Clamp(cardsW + pad * 2f + 24f * s,
+        float pw = Mathf.Clamp(Mathf.Max(uiW, typeW) + pad * 2f + 24f * s,
                                360f * s, Mathf.Min(760f * s, w * 0.9f));
         float ph = Mathf.Min(contentH + pad * 2f + hintH + 16f * s, h * 0.82f);
         var panel = new Rect((w - pw) * 0.5f, (h - ph) * 0.5f, pw, ph);
@@ -339,40 +336,82 @@ public class OverlayUI : MonoBehaviour
                   new Color(1f, 1f, 1f, 0.10f));
         y += 18f * s;
 
-        GUI.Label(new Rect(panel.x + pad, y, pw - 2f * pad, hintH),
-                  "РАЗМЕР ТЕКСТА", hintStyle);
-        y += hintH + 12f * s;
-
-        float x = panel.x + (pw - cardsW) * 0.5f;
-        for (int i = 0; i < n; i++)
-        {
-            var r = new Rect(x, y, widths[i], cardH);
-            bool sel = i == dir.UiScaleIndex;
-            bool hover = r.Contains(Event.current.mousePosition);
-
-            if (sel) DrawSolid(r, new Color(1f, 0.76f, 0.29f, 0.14f));
-            else if (hover) DrawSolid(r, new Color(1f, 1f, 1f, 0.05f));
-
-            DrawBorder(r, Mathf.Max(1f, s), sel
-                ? new Color(1f, 0.76f, 0.29f, 0.85f)
-                : new Color(1f, 1f, 1f, hover ? 0.24f : 0.10f));
-
-            GUI.Label(r, labels[i], sel ? settingsValue : settingsOption);
-
-            // Курсор в меню свободен — вариант можно выбрать и мышью.
-            if (GUI.Button(r, GUIContent.none, GUIStyle.none))
-                dir.SetUiScale(i);
-
-            x += widths[i] + gap;
-        }
-        y += cardH + 20f * s;
-
-        GUI.Label(new Rect(panel.x + pad, y, pw - 2f * pad, hintH),
-                  "Сейчас: " + Mathf.RoundToInt(dir.UiScale * 100f) + " %", hintStyle);
+        y = DrawScaleRow(panel, y, pad, gap, s, cardH, uiW, uiWidths,
+                          "РАЗМЕР ТЕКСТА", NightDirector.UiScaleSteps,
+                          dir.UiScaleIndex, 0);
+        y += 18f * s;
+        DrawScaleRow(panel, y, pad, gap, s, cardH, typeW, typeWidths,
+                     "РАЗМЕР ТЕКСТА ВВОДА", NightDirector.TypeInScaleSteps,
+                     dir.TypeInScaleIndex, 1);
 
         GUI.Label(new Rect(panel.x + pad, panel.yMax - pad - hintH,
                            pw - 2f * pad, hintH),
-                  "← → или мышь   ·   ESC — закрыть", hintStyle);
+                  "↑↓ — раздел   ← → или мышь — значение   ESC — закрыть", hintStyle);
+    }
+
+    float[] ScaleCardWidths(float[] steps, float cardH, float s)
+    {
+        var widths = new float[steps.Length];
+        for (int i = 0; i < steps.Length; i++)
+        {
+            string label = Mathf.RoundToInt(steps[i] * 100f) + "%";
+            widths[i] = Mathf.Max(cardH * 1.7f,
+                settingsOption.CalcSize(new GUIContent(label)).x + 22f * s);
+        }
+        return widths;
+    }
+
+    static float CardsWidth(float[] widths, float gap)
+    {
+        float total = gap * (widths.Length - 1);
+        for (int i = 0; i < widths.Length; i++) total += widths[i];
+        return total;
+    }
+
+    /// <summary>Одна строка настроек с карточками; возвращает Y после неё.</summary>
+    float DrawScaleRow(Rect panel, float y, float pad, float gap, float s,
+                       float cardH, float cardsW, float[] widths,
+                       string title, float[] steps, int selected, int row)
+    {
+        float hintH = hintStyle.lineHeight;
+        bool rowSelected = dir.SettingsRow == row;
+
+        GUI.Label(new Rect(panel.x + pad, y, panel.width - 2f * pad, hintH),
+                  title, rowSelected ? settingsValue : hintStyle);
+        y += hintH + 8f * s;
+
+        float x = panel.x + (panel.width - cardsW) * 0.5f;
+        for (int i = 0; i < widths.Length; i++)
+        {
+            var r = new Rect(x, y, widths[i], cardH);
+            bool isSelected = i == selected;
+            bool hover = r.Contains(Event.current.mousePosition);
+
+            if (isSelected) DrawSolid(r, new Color(1f, 0.76f, 0.29f, 0.14f));
+            else if (hover) DrawSolid(r, new Color(1f, 1f, 1f, 0.05f));
+
+            DrawBorder(r, Mathf.Max(1f, s), isSelected
+                ? new Color(1f, 0.76f, 0.29f, 0.85f)
+                : new Color(1f, 1f, 1f, hover ? 0.24f : 0.10f));
+
+            GUI.Label(r, Mathf.RoundToInt(steps[i] * 100f) + "%",
+                      isSelected ? settingsValue : settingsOption);
+
+            // Курсор в меню свободен — вариант можно выбрать и мышью.
+            if (GUI.Button(r, GUIContent.none, GUIStyle.none))
+            {
+                dir.SelectSettingsRow(row);
+                if (row == 0) dir.SetUiScale(i);
+                else dir.SetTypeInScale(i);
+            }
+
+            x += widths[i] + gap;
+        }
+        y += cardH + 6f * s;
+
+        GUI.Label(new Rect(panel.x + pad, y, panel.width - 2f * pad, hintH),
+                  "Сейчас: " + Mathf.RoundToInt(steps[selected] * 100f) + " %", hintStyle);
+        return y + hintH;
     }
 
     void DrawEnd(float w, float h)
