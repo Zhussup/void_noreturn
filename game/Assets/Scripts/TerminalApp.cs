@@ -25,7 +25,7 @@ public class TaskDef
 /// <summary>
 /// Монитор 1 — GANDEX-OS: логин, официальные мини-игры смены и служебный терминал,
 /// через который Брик делает шаги саботажа.
-/// Управление только клавиатурой: печать команд, Enter, Esc, стрелки.
+/// Управление только клавиатурой: печать команд, Enter, Ctrl+C, стрелки.
 /// </summary>
 public class TerminalApp
 {
@@ -45,6 +45,9 @@ public class TerminalApp
     readonly ScreenSurface s;
     readonly InputField input = new InputField();
     readonly List<string> outLog = new List<string>();
+    readonly List<string> history = new List<string>();
+    int historyPos = -1;       // -1 — текущий черновик, иначе индекс в history
+    string historyDraft = "";
 
     Mode mode = Mode.Login;
     int selected;
@@ -75,7 +78,10 @@ public class TerminalApp
         if (dir.ActiveStation != StationIndex) return;
 
         bool enter = Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter);
-        bool esc = Input.GetKeyDown(KeyCode.Escape);
+        // Esc занят глобальными настройками (NightDirector), поэтому «назад» —
+        // как в настоящем терминале: Ctrl+C.
+        bool back = (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl))
+                    && Input.GetKeyDown(KeyCode.C);
 
         switch (mode)
         {
@@ -103,15 +109,21 @@ public class TerminalApp
             case Mode.Match:
             case Mode.Approve:
                 input.Tick(dir.TypoChance);
-                if (esc) { mode = Mode.Tasks; input.Clear(); }
+                if (back) { mode = Mode.Tasks; input.Clear(); }
                 else if (enter) SubmitTask();
                 break;
 
             case Mode.Sabotage:
+            {
+                string before = input.text;
                 input.Tick(dir.TypoChance);
-                if (esc) { mode = Mode.Tasks; input.Clear(); }
+                if (input.text != before) ResetHistoryNav(); // правим черновик
+                if (Input.GetKeyDown(KeyCode.UpArrow)) HistoryPrev();
+                if (Input.GetKeyDown(KeyCode.DownArrow)) HistoryNext();
+                if (back) { mode = Mode.Tasks; input.Clear(); ResetHistoryNav(); }
                 else if (enter) RunCommand();
                 break;
+            }
         }
     }
 
@@ -177,6 +189,7 @@ public class TerminalApp
     {
         mode = Mode.Sabotage;
         input.Clear();
+        ResetHistoryNav();
         outLog.Clear();
         outLog.Add("Служебный терминал. Доступ: BRICK.E");
         outLog.Add("Цель: дата-центр 7. help — команды.");
@@ -187,8 +200,10 @@ public class TerminalApp
     {
         string cmd = input.text.Trim().ToLowerInvariant();
         input.Clear();
+        ResetHistoryNav();
         if (cmd.Length == 0) return;
 
+        RememberCommand(cmd);
         outLog.Add("> " + cmd);
 
         if (cmd == "exit")
@@ -254,6 +269,53 @@ public class TerminalApp
             ? "ПОЛУЧЕН" : "НЕТ";
     }
 
+    /// <summary>Запомнить введённую команду (без повторов подряд, не больше 50).</summary>
+    void RememberCommand(string cmd)
+    {
+        if (history.Count == 0 || history[history.Count - 1] != cmd)
+            history.Add(cmd);
+        if (history.Count > 50) history.RemoveAt(0);
+    }
+
+    /// <summary>Сбросить навигацию по истории: текущий текст становится черновиком.</summary>
+    void ResetHistoryNav()
+    {
+        historyPos = -1;
+        historyDraft = input.text;
+    }
+
+    /// <summary>↑ — предыдущая команда, как в шелле.</summary>
+    void HistoryPrev()
+    {
+        if (history.Count == 0) return;
+        if (historyPos == -1)
+        {
+            historyDraft = input.text;
+            historyPos = history.Count - 1;
+        }
+        else if (historyPos > 0)
+        {
+            historyPos--;
+        }
+        input.text = history[historyPos];
+    }
+
+    /// <summary>↓ — следующая команда; после последней возвращает черновик.</summary>
+    void HistoryNext()
+    {
+        if (historyPos == -1) return;
+        historyPos++;
+        if (historyPos >= history.Count)
+        {
+            historyPos = -1;
+            input.text = historyDraft;
+        }
+        else
+        {
+            input.text = history[historyPos];
+        }
+    }
+
     void Flash(string text, Color color)
     {
         message = text;
@@ -302,7 +364,7 @@ public class TerminalApp
         string shown = input.RejectedRecently
             ? "> " + input.Masked() + " ▌"
             : "> " + input.Masked() + (Time.time % 1f < 0.55f ? "_" : " ");
-        L.Add(new ScreenLine(shown, input.RejectedRecently ? Err : White));
+        L.Add(new ScreenLine(shown, input.RejectedRecently ? Err : White, dir.TypeInScale));
         L.Add(new ScreenLine("", C));
         L.Add(new ScreenLine("смена 1 — вход разрешён по паролю", Dim));
         L.Add(new ScreenLine("подсказка: brick", Dim));
@@ -367,9 +429,9 @@ public class TerminalApp
         string shown = input.RejectedRecently
             ? "> " + input.text + " ▌"
             : "> " + input.text + (Time.time % 1f < 0.55f ? "_" : " ");
-        L.Add(new ScreenLine(shown, input.RejectedRecently ? Err : White));
+        L.Add(new ScreenLine(shown, input.RejectedRecently ? Err : White, dir.TypeInScale));
         L.Add(new ScreenLine("", C));
-        L.Add(new ScreenLine("[ENTER] принять   [ESC] назад", Dim));
+        L.Add(new ScreenLine("[ENTER] принять   [CTRL+C] назад", Dim));
     }
 
     void RenderSabotage(List<ScreenLine> L)
@@ -390,7 +452,7 @@ public class TerminalApp
         string shown = input.RejectedRecently
             ? "> " + input.text + " ▌"
             : "> " + input.text + (Time.time % 1f < 0.55f ? "_" : " ");
-        L.Add(new ScreenLine(shown, input.RejectedRecently ? Err : White));
-        L.Add(new ScreenLine("[help] команды   [exit] назад", Dim));
+        L.Add(new ScreenLine(shown, input.RejectedRecently ? Err : White, dir.TypeInScale));
+        L.Add(new ScreenLine("[↑↓] история   [exit]/[CTRL+C] назад", Dim));
     }
 }

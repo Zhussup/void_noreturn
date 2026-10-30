@@ -314,8 +314,11 @@ public class OverlayUI : MonoBehaviour
         float titleH = settingsTitle.lineHeight;
         float hintH = hintStyle.lineHeight;
         float rowH = hintH + 8f * s + cardH + 6f * s + hintH;
+        // Место под живой пример размера ввода (фиксированное, чтобы панель
+        // не прыгала при переключении шага).
+        float previewH = Screen.height * 0.036f * s * 1.6f * 1.3f + 6f * s;
         float contentH = titleH + 8f * s + Mathf.Max(1f, s) + 18f * s
-                       + rowH + 18f * s + rowH;
+                       + rowH + 18f * s + rowH + previewH;
 
         float pw = Mathf.Clamp(Mathf.Max(uiW, typeW) + pad * 2f + 24f * s,
                                360f * s, Mathf.Min(760f * s, w * 0.9f));
@@ -340,9 +343,14 @@ public class OverlayUI : MonoBehaviour
                           "РАЗМЕР ТЕКСТА", NightDirector.UiScaleSteps,
                           dir.UiScaleIndex, 0);
         y += 18f * s;
-        DrawScaleRow(panel, y, pad, gap, s, cardH, typeW, typeWidths,
-                     "РАЗМЕР ТЕКСТА ВВОДА", NightDirector.TypeInScaleSteps,
-                     dir.TypeInScaleIndex, 1);
+        y = DrawScaleRow(panel, y, pad, gap, s, cardH, typeW, typeWidths,
+                          "РАЗМЕР ТЕКСТА ВВОДА", NightDirector.TypeInScaleSteps,
+                          dir.TypeInScaleIndex, 1);
+
+        // Живой пример: видно, как меняется именно печатаемый текст.
+        y += 6f * s;
+        GUI.Label(new Rect(panel.x + pad, y, pw - 2f * pad, actionTyped.lineHeight),
+                  "> PICK UP_", actionTyped);
 
         GUI.Label(new Rect(panel.x + pad, panel.yMax - pad - hintH,
                            pw - 2f * pad, hintH),

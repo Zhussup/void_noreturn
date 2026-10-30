@@ -146,7 +146,7 @@ public class MessengerApp
             string shown = moodInput.RejectedRecently
                 ? "ОЦЕНКА 1–10: " + moodInput.text + " ▌"
                 : "ОЦЕНКА 1–10: " + moodInput.text + (Time.time % 1f < 0.55f ? "_" : " ");
-            L.Add(new ScreenLine(shown, moodInput.RejectedRecently ? Err : White));
+            L.Add(new ScreenLine(shown, moodInput.RejectedRecently ? Err : White, dir.TypeInScale));
         }
         else if (!string.IsNullOrEmpty(message) && Time.time < messageUntil)
         {

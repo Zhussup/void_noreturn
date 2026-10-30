@@ -5,11 +5,16 @@ public struct ScreenLine
 {
     public string text;
     public Color color;
+    /// <summary>Множитель кегля для этой строки (1 — как обычно).</summary>
+    public float scale;
 
-    public ScreenLine(string text, Color color)
+    public ScreenLine(string text, Color color) : this(text, color, 1f) { }
+
+    public ScreenLine(string text, Color color, float scale)
     {
         this.text = text;
         this.color = color;
+        this.scale = scale <= 0f ? 1f : scale;
     }
 }
 
@@ -63,6 +68,7 @@ public class ScreenSurface : MonoBehaviour
     readonly List<TextMesh> pool = new List<TextMesh>();
     readonly List<string> lastText = new List<string>();
     readonly List<Color> lastColor = new List<Color>();
+    readonly List<float> lastScale = new List<float>();
 
     float width, height;
     float advanceEm = 0.6f; // ширина символа в долях кегля; уточняется по шрифту
@@ -268,6 +274,7 @@ public class ScreenSurface : MonoBehaviour
     {
         width = Mathf.Abs(screen.lossyScale.x);
         height = Mathf.Abs(screen.lossyScale.y);
+        lastScale.Clear();
 
         float charWidth = characterSize * (FontSize / 10f) * advanceEm;
         Cols = Mathf.Max(8, Mathf.FloorToInt((width - 2f * padX) / charWidth));
@@ -297,20 +304,30 @@ public class ScreenSurface : MonoBehaviour
             pool.Add(tm);
             lastText.Add(null);
             lastColor.Add(Color.clear);
+            lastScale.Add(1f);
         }
         dirty = true;
     }
 
     public string Fit(string text)
     {
+        return Fit(text, Cols);
+    }
+
+    static string Fit(string text, int cols)
+    {
         if (string.IsNullOrEmpty(text)) return "";
-        if (text.Length <= Cols) return text;
-        return text.Substring(0, Cols);
+        if (text.Length <= cols) return text;
+        return text.Substring(0, cols);
     }
 
     /// <summary>Обновить содержимое экрана. Дешёвый: трогает только изменившиеся строки.</summary>
     public void Set(List<ScreenLine> lines)
     {
+        // Раскладка сверху вниз: строка с увеличенным кеглем занимает больше
+        // места, поэтому следующие строки сдвигаются (и могут уйти за экран).
+        float top = height * 0.5f - padY;
+
         for (int i = 0; i < Rows; i++)
         {
             TextMesh tm = pool[i];
@@ -322,7 +339,22 @@ public class ScreenSurface : MonoBehaviour
             }
             if (!on) continue;
 
-            string t = Fit(lines[i].text);
+            float lineScale = Mathf.Clamp(lines[i].scale, 0.6f, 2f);
+            if (Mathf.Abs(lastScale[i] - lineScale) > 0.001f)
+            {
+                lastScale[i] = lineScale;
+                tm.characterSize = characterSize * lineScale;
+                dirty = true;
+            }
+
+            tm.transform.localPosition = new Vector3(
+                -width * 0.5f + padX, top, 0f);
+
+            int cols = Mathf.Max(1, Mathf.FloorToInt(
+                (width - 2f * padX) /
+                (characterSize * lineScale * (FontSize / 10f) * advanceEm)));
+
+            string t = Fit(lines[i].text, cols);
             if (lastText[i] != t)
             {
                 tm.text = t;
@@ -335,6 +367,8 @@ public class ScreenSurface : MonoBehaviour
                 lastColor[i] = lines[i].color;
                 dirty = true;
             }
+
+            top -= lineHeight * lineScale;
         }
     }
 }
