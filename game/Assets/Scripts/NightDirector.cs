@@ -219,11 +219,12 @@ public class NightDirector : MonoBehaviour
     }
 
     // Эталон текста — экран 0.32 × 0.24 м. Монитор в сцене увеличен до 1.35×,
-    // поэтому кегль и шаг строк считаются от фактической высоты экрана.
+    // но текст в ОС специально мельче расчётного — 0.85 от масштаба монитора.
     const float RefScreenHeight = 0.24f;
     const float RefCharSize = 0.00064f;
     const float RefLineHeight = 0.0115f;
     const float LineSpacingBoost = 1.12f; // чуть больше воздуха между строками
+    const float OsTextScale = 0.85f;      // текст ОС мельче, монитор — больше
 
     /// <summary>Кегль и шаг строк под физическую высоту экрана.</summary>
     static void TextMetrics(Transform screen, out float charSize, out float lineHeight)
@@ -231,6 +232,7 @@ public class NightDirector : MonoBehaviour
         float k = 1f;
         if (screen != null && screen.lossyScale.y > 0.001f)
             k = Mathf.Max(0.5f, screen.lossyScale.y / RefScreenHeight);
+        k *= OsTextScale;
         charSize = RefCharSize * k;
         lineHeight = RefLineHeight * k * LineSpacingBoost;
     }
