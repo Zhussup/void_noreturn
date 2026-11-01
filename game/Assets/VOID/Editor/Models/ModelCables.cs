@@ -26,6 +26,8 @@ namespace VOID.EnvModels
         static readonly Vector3 TerminalPos = new Vector3(0.38f, 0f, -0.04f);
         static readonly Vector3 ChatPos = new Vector3(-0.38f, 0f, -0.04f);
         const float TerminalYaw = -10f, ChatYaw = 10f;
+        // задняя панель SM_Monitor_CRT в его локальных координатах (без масштаба)
+        const float MonitorBackZ = -0.192f;
         // мышь и её шнур лежат на стопке Paper_01/Paper_02 (верх листов на 4 мм выше стола)
         const float PaperTop = 0.004f;
         public static readonly Vector3 MousePos = new Vector3(0.33f, PaperTop, 0.27f);
@@ -37,11 +39,12 @@ namespace VOID.EnvModels
             var b = new PBKit.Builder();
             var p = new PBKit.Poly();
 
-            MonitorCable(p, TerminalPos, TerminalYaw, 0.025f, DropX, 0.0035f);
-            MonitorCable(p, TerminalPos, TerminalYaw, 0.06f, DropX + 0.025f, 0.003f);
-            MonitorCable(p, ChatPos, ChatYaw, -0.025f, -DropX, 0.0035f);
-            MonitorCable(p, ChatPos, ChatYaw, -0.06f, -DropX - 0.025f, 0.003f);
-            MouseCord(p);
+            float s = MonitorScale();
+            MonitorCable(p, TerminalPos, TerminalYaw, s, 0.025f, DropX, 0.0035f);
+            MonitorCable(p, TerminalPos, TerminalYaw, s, 0.06f, DropX + 0.025f, 0.003f);
+            MonitorCable(p, ChatPos, ChatYaw, s, -0.025f, -DropX, 0.0035f);
+            MonitorCable(p, ChatPos, ChatYaw, s, -0.06f, -DropX - 0.025f, 0.003f);
+            MouseCord(p, s);
             b.Raw(p, 0);
 
             Mesh mesh = b.Bake("SM_Cables", 1);
@@ -59,21 +62,38 @@ namespace VOID.EnvModels
             return pos + Quaternion.Euler(0f, yaw, 0f) * local;
         }
 
-        /// <summary>Кабель из задней панели CRT (x0 — смещение по панели) до пола за столом.</summary>
-        static void MonitorCable(PBKit.Poly p, Vector3 mon, float yaw, float x0, float dropX, float r)
+        /// <summary>
+        /// Масштаб мониторов — из корня PRB_Monitor_Terminal (его задаёт базовый
+        /// PRB_Monitor_CRT). Кабели строятся под фактический размер корпуса.
+        /// </summary>
+        static float MonitorScale()
+        {
+            var asset = AssetDatabase.LoadAssetAtPath<GameObject>(PBKit.PrefabsDir + "/PRB_Monitor_Terminal.prefab");
+            return asset != null ? asset.transform.localScale.x : 1f;
+        }
+
+        /// <summary>
+        /// Кабель из задней панели CRT (x0 — смещение по панели) до пола за столом.
+        /// Разъём и высоты масштабируются с корпусом, а дуга за панелью — нет:
+        /// за большим монитором до кромки стола остаётся всего ~7 см.
+        /// </summary>
+        static void MonitorCable(PBKit.Poly p, Vector3 mon, float yaw, float scale,
+                                 float x0, float dropX, float r)
         {
             float side = Mathf.Sign(dropX);
-            Vector3 onDesk = At(mon, yaw, new Vector3(x0, r, -0.27f));
+            float back = MonitorBackZ * scale;
+            float x = x0 * scale;
+            Vector3 onDesk = At(mon, yaw, new Vector3(x, r, back - 0.055f));
             var pts = new List<Vector3>
             {
-                // внутри корпуса → наружу из задней панели (z ≈ −0.19) → вниз на стол
-                At(mon, yaw, new Vector3(x0, 0.17f, -0.16f)),
-                At(mon, yaw, new Vector3(x0, 0.165f, -0.21f)),
-                At(mon, yaw, new Vector3(x0, 0.105f, -0.237f)),
-                At(mon, yaw, new Vector3(x0, 0.025f, -0.25f)),
+                // внутри корпуса → наружу из задней панели → вниз на стол
+                At(mon, yaw, new Vector3(x, 0.17f * scale, back + 0.05f)),
+                At(mon, yaw, new Vector3(x, 0.165f * scale, back - 0.015f)),
+                At(mon, yaw, new Vector3(x, 0.105f * scale, back - 0.035f)),
+                At(mon, yaw, new Vector3(x, 0.025f * scale, back - 0.047f)),
                 onDesk,
                 // по столу к задней кромке и через неё
-                new Vector3(Mathf.Lerp(onDesk.x, dropX, 0.55f), r, -0.335f),
+                new Vector3(Mathf.Lerp(onDesk.x, dropX, 0.55f), r, Mathf.Lerp(onDesk.z, EdgeZ, 0.5f)),
                 new Vector3(dropX, r, EdgeZ + 0.003f),
                 new Vector3(dropX, -0.006f, EdgeZ - 0.0075f),
                 // свободно висит за столом и ложится на пол вдоль стены
@@ -88,11 +108,11 @@ namespace VOID.EnvModels
         }
 
         /// <summary>Шнур мыши: от её передней стенки к подставке терминального монитора.</summary>
-        static void MouseCord(PBKit.Poly p)
+        static void MouseCord(PBKit.Poly p, float scale)
         {
             const float r = 0.0018f;
-            // до подставки шнур идёт по бумаге, подставка (высотой 1 см) его и прячет
-            Vector3 foot = At(TerminalPos, TerminalYaw, new Vector3(0.06f, PaperTop + r, 0.14f));
+            // до подставки шнур идёт по бумаге, подставка его и прячет
+            Vector3 foot = At(TerminalPos, TerminalYaw, new Vector3(0.06f * scale, PaperTop + r, 0.14f * scale));
             var pts = new List<Vector3>
             {
                 At(MousePos, MouseYaw, new Vector3(0f, 0.004f, -0.066f)),
