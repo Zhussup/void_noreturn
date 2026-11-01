@@ -30,8 +30,10 @@
 ## 1. Соглашения
 
 - **Имена:** `SFX_`, `AMB_`, `VO_`, `MUS_` + латиница, snake_case, вариации `_01…_12`.
-- **Папки:** `game/Assets/VOID/Audio/{Ambience, SFX, Voice, Music}`;
-  внутри SFX — `Keyboard/`, `Phone/`, `Props/`, `UI/`, `States/`, `Events/`.
+- **Папки:** `game/Assets/VOID/Audio/` → `SFX/{Keyboard, Phone, Desk, Recorder, UI,
+  States, World}`, `AMB`, `VO`, `MUS`. Какой файл в какой папке — §14; в каждой
+  папке лежит `_FILES.md` со списком ожидаемых файлов. Экспорт из DAW —
+  `D:\VOID_Audio\export\` с той же структурой.
 - **Исходники:** WAV 48 кГц / 24 бит (в `03_assets_checklist.md` сейчас 16 бит —
   поправить: 24 бит в исходниках, Unity всё равно сожмёт).
 - **Громкость:** фоны и музыка −16 LUFS integrated, пики ≤ −1 dBTP; короткие SFX
@@ -56,8 +58,8 @@ P1 к сдаче, P2 полировка · **Хук** — где в коде и�
 | `AMB_room_night` | «тишина» квартиры: низкий гул дома, воздух | 2D | L | 60–90 с | 1 | **P0** | старт сцены |
 | `AMB_pc_fans` | кулеры двух системников, ровный шум | 3D Desk (под столом, 0, 0.3, −1.6) | L | 30–60 с | 1 | **P0** | старт сцены |
 | `AMB_crt_hum` | гул и писк строчника CRT (~15,7 кГц срезать до ~8–10 кГц, иначе режет) | 3D каждый монитор | L | 20–30 с | 2 (терм/чат с разной фазой) | **P0** | старт сцены |
-| `AMB_fridge` | холодильник за стеной: включение/гул/щелчок выключения | 3D за южной стеной | L + 1 | 40 с + 2 с | 1 + 2 щелчка | P1 | таймер в звуковом компоненте |
-| `AMB_radiator` | батарея: тихое журчание, редкие тики металла | 3D Radiator | L + 1 | 30 с + тики | 1 + 4 тика | P1 | таймер |
+| `AMB_fridge` + `AMB_fridge_click_01…02` | холодильник за стеной: гул (луп) + щелчки включения/выключения | 3D за южной стеной | L + 1 | 40 с + 2 с | 1 + 2 щелчка | P1 | таймер в звуковом компоненте |
+| `AMB_radiator` + `AMB_radiator_tick_01…04` | батарея: тихое журчание (луп) + редкие тики металла | 3D Radiator | L + 1 | 30 с + тики | 1 + 4 тика | P1 | таймер |
 | `AMB_city_window` | город за окном: далёкая трасса, ветер, без голосов | 3D WindowFrame | L | 60–90 с | 1 | **P0** | старт сцены |
 | `AMB_city_events` | редкие события за окном: далёкая сирена, гул самолёта, собака | 3D WindowFrame | 1 | 5–15 с | 4–6 | P2 | таймер, реже к утру |
 | `AMB_white_noise` | широкополосный шум-подложка (связывает слои, растёт с тревогой) | 2D | L | 30 с | 1 | P1 | `State.anxiety` |
@@ -314,3 +316,24 @@ Exposed-параметры: `MasterVol`, `MusicVol`, `SfxVol`, `VoVol`, `AmbVol`
 Без хуков от Жусупа из этого сразу заработают только фоны (старт сцены) и
 `SFX_phone_ring` (подменить клип в `ringSource`). Для остального нужен п.15 из
 [05_audit.md](05_audit.md).
+
+---
+
+## 14. Раскладка по папкам
+
+Корень: `game/Assets/VOID/Audio/`. Экспорт из DAW — в `D:\VOID_Audio\export\`
+с той же структурой. В каждой папке проекта — `_FILES.md` со списком файлов.
+
+| Папка | Файлы |
+|---|---|
+| `SFX/Keyboard/` | `SFX_key_press_01…12`, `SFX_key_space_01…04`, `SFX_key_enter_01…04`, `SFX_key_reject_01…04`, `SFX_key_backspace_01…04`, `SFX_key_press_void_01…08`, `SFX_key_swap_01…04`, `SFX_action_wrong_01…02`, `SFX_action_letter_01…03` |
+| `SFX/Phone/` | `SFX_phone_ring`, `SFX_phone_pickup_01…02`, `SFX_phone_hangup_01…02`, `SFX_phone_ring_distort`, `SFX_phone_line_hiss`, `SFX_phone_hangup_tone`, `SFX_phone_ring_stop` |
+| `SFX/Desk/` | `SFX_pill_pop_01…03`, `SFX_pill_swallow_01…02`, `SFX_blister_empty`, `SFX_rest_lie_01…02`, `SFX_rest_get_up_01…02` |
+| `SFX/Recorder/` | `SFX_dict_click_play_01…02`, `SFX_dict_click_stop`, `SFX_dict_tape_hiss`, `SFX_dict_moved` |
+| `SFX/UI/` | `SFX_login_ok`, `SFX_task_ok_01…02`, `SFX_task_error_01…02`, `SFX_chat_incoming_01…02`, `SFX_login_fail`, `SFX_scan`, `SFX_connect`, `SFX_download_loop`, `SFX_download_done`, `SFX_logs_clear`, `SFX_chat_harmony`, `SFX_chat_security`, `SFX_cyber_tick`, `SFX_cyber_check_clean`, `SFX_cyber_check_dirty`, `SFX_cyber_alarm`, `SFX_cmd_unknown`, `SFX_chat_boss`, `SFX_screen_focus`, `SFX_dc7_down`, `SFX_logout` |
+| `SFX/States/` | `SFX_glitch_01…04`, `SFX_heartbeat_slow`, `SFX_heartbeat_fast`, `SFX_intro_night`, `SFX_blackout_tail`, `SFX_breath_anxious`, `SFX_anxiety_drone`, `SFX_tinnitus`, `SFX_rest_breath`, `SFX_death_heart_stop`, `SFX_persona_switch`, `SFX_white_flash`, `SFX_brick_breakthrough_01…04`, `SFX_qte_struggle` |
+| `SFX/World/` | `SFX_shift_end`, `SFX_station_switch_01…03`, `SFX_clock_jump`, `SFX_knock_door_01…03`, `SFX_chair_creak_01…04` |
+| `AMB/` | `AMB_room_night`, `AMB_pc_fans`, `AMB_crt_hum_01…02`, `AMB_city_window`, `AMB_fridge`, `AMB_fridge_click_01…02`, `AMB_radiator`, `AMB_radiator_tick_01…04`, `AMB_white_noise`, `AMB_room_morning`, `AMB_void_room`, `AMB_city_events_01…06`, `AMB_clock_tick` |
+| `VO/` | `VO_record_01`, `VO_viktor_n1_01…03`, `VO_record_02`, `VO_record_03`, `VO_record_brick`, `VO_viktor_n2_01…` (текста нет), `VO_viktor_n3_01…` (текста нет), `VO_viktor_n4_01…` (текста нет), `VO_viktor_n5_01…` (текста нет), `VO_viktor_reprimand_01…` (текста нет), `VO_viktor_thanks`, `VO_harmony_01…` (текста нет), `VO_brick_thought_01…06`, `VO_void_answer_01…` (текста нет) |
+| `MUS/` | `MUS_night_calm_{pad,pulse,texture}`, `MUS_hack_{rhythm,bass}`, `MUS_anxiety_{dissonance,riser}`, `MUS_void_{drone,bells}`, `MUS_ending_noreturn`, `MUS_ending_void`, `MUS_title` |
+
