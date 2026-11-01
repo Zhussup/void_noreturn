@@ -37,6 +37,17 @@ public class ScreenSurface : MonoBehaviour
     const float StandDepth = -1000f;   // стенды ниже комнаты, дальше farClip камеры игрока
     const float StandSpacing = 5f;
 
+    /// <summary>
+    /// Эталонная сетка при размере текста 1.0. Кегль выводится из ширины экрана,
+    /// поэтому сетка не зависит ни от масштаба монитора, ни от переданного кегля:
+    /// при настройке по умолчанию (1.2) — 60 × 19, как в 03_screens_design.md;
+    /// при 1.0 — 72 × 22, при 1.5 — 48 × 15.
+    /// </summary>
+    public const float DesignCols = 72f;
+    public const float DesignRows = 22.8f;
+    const float PadXFrac = 0.0375f; // 0.012 / 0.32 — прежние поля в долях экрана
+    const float PadYFrac = 0.0417f; // 0.010 / 0.24
+
     public Transform screen;
     public float characterSize = 0.00064f;
     public float lineHeight = 0.0115f;
@@ -88,6 +99,10 @@ public class ScreenSurface : MonoBehaviour
     static readonly int GlitchId = Shader.PropertyToID("_Glitch");
     static readonly int SeedId = Shader.PropertyToID("_Seed");
 
+    /// <remarks>
+    /// characterSize и lineHeight больше не влияют на сетку: она считается
+    /// от DesignCols × DesignRows. Аргументы оставлены для совместимости вызовов.
+    /// </remarks>
     public static ScreenSurface Create(Transform screenQuad, Font font,
                                        float characterSize = 0.00064f,
                                        float lineHeight = 0.0115f)
@@ -222,6 +237,19 @@ public class ScreenSurface : MonoBehaviour
                 advanceEm = ci.advance / (float)FontSize;
         }
         Font.textureRebuilt += OnFontRebuilt;
+
+        FitGrid();
+    }
+
+    /// <summary>Поля и базовый кегль — из размера экрана и эталонной сетки.</summary>
+    void FitGrid()
+    {
+        padX = width * PadXFrac;
+        padY = height * PadYFrac;
+        baseCharacterSize = (width - 2f * padX) / (DesignCols * advanceEm * (FontSize / 10f));
+        baseLineHeight = (height - 2f * padY) / DesignRows;
+        characterSize = baseCharacterSize * appliedScale;
+        lineHeight = baseLineHeight * appliedScale;
     }
 
     static Material fallback;
@@ -277,8 +305,9 @@ public class ScreenSurface : MonoBehaviour
         lastScale.Clear();
 
         float charWidth = characterSize * (FontSize / 10f) * advanceEm;
-        Cols = Mathf.Max(8, Mathf.FloorToInt((width - 2f * padX) / charWidth));
-        Rows = Mathf.Max(4, Mathf.FloorToInt((height - 2f * padY) / lineHeight));
+        // +0.001: ровно 60.0 колонок не должно округлиться в 59 из-за float
+        Cols = Mathf.Max(8, Mathf.FloorToInt((width - 2f * padX) / charWidth + 0.001f));
+        Rows = Mathf.Max(4, Mathf.FloorToInt((height - 2f * padY) / lineHeight + 0.001f));
 
         for (int i = 0; i < Rows; i++)
         {
@@ -352,7 +381,7 @@ public class ScreenSurface : MonoBehaviour
 
             int cols = Mathf.Max(1, Mathf.FloorToInt(
                 (width - 2f * padX) /
-                (characterSize * lineScale * (FontSize / 10f) * advanceEm)));
+                (characterSize * lineScale * (FontSize / 10f) * advanceEm) + 0.001f));
 
             string t = Fit(lines[i].text, cols);
             if (lastText[i] != t)
