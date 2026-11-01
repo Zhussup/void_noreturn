@@ -122,7 +122,7 @@ namespace VOID.EnvModels
         static void BuildPrefabs(Mesh mesh)
         {
             string basePath = PBKit.PrefabsDir + "/" + BaseName + ".prefab";
-            Material plastic = PBKit.Mat("MAT_Plastic");
+            Material plastic = PBKit.Mat("MAT_Plastic_CRT"); // корпус CRT — свой пластик под текстуру
             Material metal = PBKit.Mat("MAT_Metal");
 
             if (AssetDatabase.LoadAssetAtPath<GameObject>(basePath) == null)

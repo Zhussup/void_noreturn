@@ -131,7 +131,7 @@ namespace VOID.EnvModels
             PBKit.EditPrefab("PRB_Shelf", root =>
             {
                 GameObject m = PBKit.SetMeshChild(root.transform, "Mesh", mesh,
-                    PBKit.Mat("MAT_Desk_Wood"), PBKit.Mat("MAT_Plastic"), PBKit.Mat("MAT_Fabric"), PBKit.Mat("MAT_Paper"));
+                    PBKit.Mat("MAT_Desk_Wood"), PBKit.Mat("MAT_Plastic"), PBKit.Mat("MAT_Fabric"), PBKit.Mat("MAT_Books"));
                 PBKit.FitBox(root.GetComponent<BoxCollider>(), mesh, m.transform, root.transform);
             });
         }

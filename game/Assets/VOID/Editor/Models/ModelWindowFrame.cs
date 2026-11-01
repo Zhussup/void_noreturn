@@ -70,7 +70,7 @@ namespace VOID.EnvModels
             PBKit.EditPrefab("PRB_WindowFrame", root =>
             {
                 GameObject m = PBKit.SetMeshChild(root.transform, "Mesh", frame,
-                    PBKit.Mat("MAT_Ceramic"), PBKit.Mat("MAT_Metal"));
+                    PBKit.Mat("MAT_Paint_White"), PBKit.Mat("MAT_Metal"));
                 GameObject gl = PBKit.SetMeshChild(root.transform, "Glazing", glass, PBKit.GlassMat());
                 gl.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.Off;
                 PBKit.FitBox(root.GetComponent<BoxCollider>(), frame, m.transform, root.transform);

@@ -42,7 +42,7 @@ namespace VOID.EnvModels
             PBKit.EditPrefab("PRB_Door", root =>
             {
                 GameObject m = PBKit.SetMeshChild(root.transform, "Mesh", mesh,
-                    PBKit.Mat("MAT_Ceramic"), PBKit.Mat("MAT_Desk_Wood"), PBKit.Mat("MAT_Metal"));
+                    PBKit.Mat("MAT_Paint_White"), PBKit.Mat("MAT_Desk_Wood"), PBKit.Mat("MAT_Metal"));
                 PBKit.FitBox(root.GetComponent<BoxCollider>(), mesh, m.transform, root.transform);
             });
         }

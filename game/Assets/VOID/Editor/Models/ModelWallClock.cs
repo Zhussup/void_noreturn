@@ -58,7 +58,7 @@ namespace VOID.EnvModels
             PBKit.EditPrefab("PRB_WallClock", root =>
             {
                 Material plastic = PBKit.Mat("MAT_Plastic");
-                Material paper = PBKit.Mat("MAT_Paper");
+                Material paper = PBKit.Mat("MAT_Clock_Face");
                 Material metal = PBKit.Mat("MAT_Metal");
 
                 GameObject m = PBKit.SetMeshChild(root.transform, "Mesh", body, plastic);
