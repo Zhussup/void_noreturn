@@ -14,7 +14,7 @@ public class OverlayUI : MonoBehaviour
     Texture2D white;
 
     GUIStyle center, title, endStyle, callName, callLine, callInput, hintStyle, subtitleStyle;
-    GUIStyle actionGray, actionTyped, actionError, settingsTitle, settingsOption, settingsValue;
+    GUIStyle interactionLabel, inputPreview, settingsTitle, settingsOption, settingsValue;
     GUIStyle hudText, hudWarn, hudBad;
     float styledScale = -1f;
     float styledTypeInScale = -1f;
@@ -95,18 +95,16 @@ public class OverlayUI : MonoBehaviour
         subtitleStyle.fontSize = Mathf.RoundToInt(Screen.height * 0.022f * s);
         subtitleStyle.normal.textColor = new Color(0.92f, 0.95f, 0.92f);
 
-        actionGray = new GUIStyle(center);
+        interactionLabel = new GUIStyle(center);
         // Подпись действия читается поверх мира с рабочего места — крупнее прочего текста.
-        actionGray.fontSize = Mathf.RoundToInt(Screen.height * 0.036f * s * ti);
-        actionGray.alignment = TextAnchor.MiddleLeft;
-        actionGray.wordWrap = false;
-        actionGray.normal.textColor = new Color(0.55f, 0.57f, 0.55f, 0.95f);
+        interactionLabel.fontSize = Mathf.RoundToInt(Screen.height * 0.030f * s);
+        interactionLabel.alignment = TextAnchor.MiddleCenter;
+        interactionLabel.wordWrap = false;
+        interactionLabel.normal.textColor = new Color(0.92f, 0.95f, 0.92f, 0.95f);
 
-        actionTyped = new GUIStyle(actionGray);
-        actionTyped.normal.textColor = new Color(0.96f, 0.98f, 0.96f);
-
-        actionError = new GUIStyle(actionGray);
-        actionError.normal.textColor = new Color(1f, 0.36f, 0.36f, 0.95f);
+        // Живой пример в настройках показывает размер печатаемого текста
+        // (сейчас это ответ на звонок) — тот же стиль, что и строка ответа.
+        inputPreview = new GUIStyle(callInput);
 
         settingsTitle = new GUIStyle(center);
         settingsTitle.fontSize = Mathf.RoundToInt(Screen.height * 0.034f * s);
@@ -163,7 +161,7 @@ public class OverlayUI : MonoBehaviour
         {
             DrawStatusHud(w, h);
             DrawCrosshair(w, h);
-            if (dir.ActionVisible) DrawAction(w, h);
+            if (dir.InteractionVisible) DrawInteraction(w, h);
         }
 
         if (dir.Modal == ModalKind.Intro)
@@ -188,7 +186,7 @@ public class OverlayUI : MonoBehaviour
             GUI.Label(band, dir.Subtitle, subtitleStyle);
         }
 
-        if (dir.Modal == ModalKind.None && dir.Running && !dir.ActionVisible &&
+        if (dir.Modal == ModalKind.None && dir.Running &&
             !string.IsNullOrEmpty(dir.Hint))
         {
             var r = new Rect(0f, h - h * 0.035f * s, w, h * 0.03f * s);
@@ -279,39 +277,19 @@ public class OverlayUI : MonoBehaviour
         GUI.color = Color.white;
     }
 
-    void DrawAction(float w, float h)
+    void DrawInteraction(float w, float h)
     {
-        string prompt = dir.ActionPrompt;
-        if (string.IsNullOrEmpty(prompt)) return;
+        string label = dir.InteractionLabel;
+        if (string.IsNullOrEmpty(label)) return;
 
-        int typed = Mathf.Clamp(dir.ActionTyped, 0, prompt.Length);
-        int prefix = FilledPrefix(prompt, typed);
-        GUIStyle gray = dir.ActionRejected ? actionError : actionGray;
-
-        float charW = gray.CalcSize(new GUIContent("M")).x;
-        float charH = gray.lineHeight > 1f ? gray.lineHeight : h * 0.03f;
-        float textW = charW * prompt.Length;
+        GUIStyle style = interactionLabel;
+        float textW = style.CalcSize(new GUIContent(label)).x + 8f;
+        float textH = style.lineHeight > 1f ? style.lineHeight : h * 0.03f;
         float x = w * 0.5f - textW * 0.5f;
         float y = h * 0.5f + h * 0.035f;
 
-        DrawBand(new Rect(x - 16f, y - 6f, textW + 32f, charH + 12f), 0.55f);
-
-        GUI.Label(new Rect(x, y, textW, charH), prompt, gray);
-        if (prefix > 0)
-            GUI.Label(new Rect(x, y, textW, charH), prompt.Substring(0, prefix), actionTyped);
-    }
-
-    /// <summary>Сколько символов подсказки закрашено, если набрано typed букв.</summary>
-    static int FilledPrefix(string prompt, int typed)
-    {
-        int n = 0;
-        for (int i = 0; i < prompt.Length; i++)
-        {
-            if (prompt[i] == ' ') continue;
-            if (n >= typed) return i;
-            n++;
-        }
-        return prompt.Length;
+        DrawBand(new Rect(x - 16f, y - 6f, textW + 32f, textH + 12f), 0.55f);
+        GUI.Label(new Rect(x, y, textW, textH), label, style);
     }
 
     void DrawIntro(float w, float h)
@@ -403,7 +381,9 @@ public class OverlayUI : MonoBehaviour
         float rowH = hintH + 8f * s + cardH + 6f * s + hintH;
         // Место под живой пример размера ввода (фиксированное, чтобы панель
         // не прыгала при переключении шага).
-        float previewH = Screen.height * 0.036f * s * 1.6f * 1.3f + 6f * s;
+        float previewH = Screen.height * 0.021f * s
+                       * NightDirector.TypeInScaleSteps[NightDirector.TypeInScaleSteps.Length - 1]
+                       + 6f * s;
         float contentH = titleH + 8f * s + Mathf.Max(1f, s) + 18f * s
                        + rowH + 18f * s + rowH + previewH;
 
@@ -434,10 +414,11 @@ public class OverlayUI : MonoBehaviour
                           "РАЗМЕР ТЕКСТА ВВОДА", NightDirector.TypeInScaleSteps,
                           dir.TypeInScaleIndex, 1);
 
-        // Живой пример: видно, как меняется именно печатаемый текст.
+        // Живой пример: видно, как меняется именно печатаемый текст
+        // (сейчас из печатаемого — только ответ на звонок).
         y += 6f * s;
-        GUI.Label(new Rect(panel.x + pad, y, pw - 2f * pad, actionTyped.lineHeight),
-                  "> PICK UP_", actionTyped);
+        GUI.Label(new Rect(panel.x + pad, y, pw - 2f * pad, inputPreview.lineHeight),
+                  "> Это Брик. Смена идет._", inputPreview);
 
         GUI.Label(new Rect(panel.x + pad, panel.yMax - pad - hintH,
                            pw - 2f * pad, hintH),

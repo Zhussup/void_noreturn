@@ -114,8 +114,6 @@ public class PlayerController : MonoBehaviour
 
     // E, которую забрал фокус, не должна попасть в строку ввода приложения.
     static bool focusKeyCharPending;
-    // Z, которую забрал зум, не должна стать «неверной буквой» в подписи действия.
-    static bool zoomKeyCharPending;
 
     float baseYaw, basePitch;
     float lookYaw, lookPitch;
@@ -160,7 +158,6 @@ public class PlayerController : MonoBehaviour
     void Update()
     {
         focusKeyCharPending = false;
-        zoomKeyCharPending = false;
         EscapeClearedFocus = false;
 
         if (Input.GetKeyDown(KeyCode.Escape))
@@ -175,7 +172,6 @@ public class PlayerController : MonoBehaviour
 
         UpdateAim();
         HandleMonitorFocus();
-        HandleZoom();
         HandleMouseLook();
 
         if (inputEnabled && stations != null && stations.Length > 0)
@@ -380,25 +376,6 @@ public class PlayerController : MonoBehaviour
     }
 
     // ---------------------------------------------------------------- зум
-
-    /// <summary>
-    /// Z отдана зуму, а не подписи действия: иначе при прицеле на предмет
-    /// она мигала бы как «неверная буква».
-    /// </summary>
-    void HandleZoom()
-    {
-        if (!Zooming) return;
-        if (Input.GetKeyDown(zoomKey)) zoomKeyCharPending = true;
-    }
-
-    /// <summary>Съесть Z, которую зум забрал у подписи действия / строки ввода.</summary>
-    public static bool ConsumeZoomKeyChar(char c)
-    {
-        if (!zoomKeyCharPending) return false;
-        if (c != 'z' && c != 'Z') return false;
-        zoomKeyCharPending = false;
-        return true;
-    }
 
     // ---------------------------------------------------------------- мышь
 
