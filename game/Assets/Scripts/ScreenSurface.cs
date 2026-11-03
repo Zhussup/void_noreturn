@@ -40,12 +40,23 @@ public class ScreenSurface : MonoBehaviour
     /// <summary>
     /// Эталонная сетка при размере текста 1.0. Кегль выводится из ширины экрана,
     /// поэтому сетка не зависит ни от масштаба монитора, ни от переданного кегля:
-    /// при настройке по умолчанию (1.2) — 60 × 19, как в 03_screens_design.md;
-    /// при 1.0 — 72 × 22, при 1.5 — 48 × 15.
+    /// Настройка размера текста действует на экраны через GridScale (scale^0.4):
+    ///   100 % — 56 × 17, 110 % — 54 × 17, 120 % (по умолчанию) — 52 × 16,
+    ///   135 % — 50 × 15, 150 % — 48 × 15.
+    /// При 120 % на станции в 1920×1080 это ≥ 11 px на символ. Нижняя граница
+    /// (48 колонок при 150 %) та же, что была: под неё написаны шапки приложений.
+    /// Шаги настройки и сохранённый в PlayerPrefs индекс не меняются.
     /// </summary>
-    public const float DesignCols = 72f;
-    public const float DesignRows = 22.8f;
-    const float PadXFrac = 0.0375f; // 0.012 / 0.32 — прежние поля в долях экрана
+    public const float DesignCols = 56.6f;
+    public const float DesignRows = 17.7f;
+    const float ScaleCurve = 0.4f;
+
+    /// <summary>Множитель кегля экрана для пользовательского размера текста.</summary>
+    static float GridScale(float userScale) => Mathf.Pow(userScale, ScaleCurve);
+
+    // Боковые поля 2.8 % ширины (было 3.75 %): изгиб кинескопа (Curvature 0.03)
+    // уводит за край не больше 1.5 %, а освободившаяся ширина даёт 52 колонки по 11 px.
+    const float PadXFrac = 0.028f;
     const float PadYFrac = 0.0417f; // 0.010 / 0.24
 
     public Transform screen;
@@ -144,8 +155,8 @@ public class ScreenSurface : MonoBehaviour
         if (Mathf.Abs(scale - appliedScale) < 0.001f) return;
 
         appliedScale = scale;
-        characterSize = baseCharacterSize * scale;
-        lineHeight = baseLineHeight * scale;
+        characterSize = baseCharacterSize * GridScale(scale);
+        lineHeight = baseLineHeight * GridScale(scale);
         Rebuild();
     }
 
@@ -252,8 +263,8 @@ public class ScreenSurface : MonoBehaviour
         padY = height * PadYFrac;
         baseCharacterSize = (width - 2f * padX) / (DesignCols * advanceEm * (FontSize / 10f));
         baseLineHeight = (height - 2f * padY) / DesignRows;
-        characterSize = baseCharacterSize * appliedScale;
-        lineHeight = baseLineHeight * appliedScale;
+        characterSize = baseCharacterSize * GridScale(appliedScale);
+        lineHeight = baseLineHeight * GridScale(appliedScale);
     }
 
     static Material fallback;
@@ -309,7 +320,7 @@ public class ScreenSurface : MonoBehaviour
         lastScale.Clear();
 
         float charWidth = characterSize * (FontSize / 10f) * advanceEm;
-        // +0.001: ровно 60.0 колонок не должно округлиться в 59 из-за float
+        // +0.001: ровное число колонок не должно округлиться на одну меньше из-за float
         Cols = Mathf.Max(8, Mathf.FloorToInt((width - 2f * padX) / charWidth + 0.001f));
         Rows = Mathf.Max(4, Mathf.FloorToInt((height - 2f * padY) / lineHeight + 0.001f));
 
