@@ -3323,7 +3323,7 @@ MonoBehaviour:
   maxPitch: 50
   moveLerp: 7
   lookLerp: 20
-  zoomKey: 122
+  zoomKey: 308
   zoomFovScale: 0.55
   zoomLerp: 8
   zoomMinFov: 8

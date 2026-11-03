@@ -760,7 +760,7 @@ public class NightDirector : MonoBehaviour
             else if (Player.CanFocusMonitor)
                 Hint += "   ·   E — приблизить";
             else if (!TextInputActive)
-                Hint += "   ·   Z — зум";
+                Hint += "   ·   Alt — зум";
         }
     }
 
