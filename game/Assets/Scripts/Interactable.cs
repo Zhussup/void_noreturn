@@ -2,14 +2,13 @@ using System;
 using UnityEngine;
 
 /// <summary>
-/// Объект, с которым игрок взаимодействует, наведя прицел и напечатав
-/// серую подсказку (например, PICK UP у телефона). Подсказка служит
-/// одновременно и действием: пока она не набрана, ничего не происходит.
+/// Объект, с которым игрок взаимодействует клавишей E, наведя на него прицел.
+/// Пока действие доступно, у прицела видна короткая подпись с клавишей.
 /// </summary>
 public class Interactable : MonoBehaviour
 {
-    [Tooltip("Что нужно напечатать. Пустая строка — взаимодействие недоступно.")]
-    public string prompt = "PICK UP";
+    [Tooltip("Подпись у прицела, пока действие доступно. Пустая строка — недоступно.")]
+    public string label = "E — взять трубку";
 
     [Tooltip("Доступно ли действие прямо сейчас.")]
     public bool available = true;
@@ -19,8 +18,8 @@ public class Interactable : MonoBehaviour
 
     public event Action Activated;
 
-    public bool IsAvailable => available && !string.IsNullOrEmpty(prompt);
-    public string Prompt => IsAvailable ? prompt : "";
+    public bool IsAvailable => available && !string.IsNullOrEmpty(label);
+    public string Label => IsAvailable ? label : "";
 
     public void Activate()
     {

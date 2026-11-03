@@ -44,7 +44,7 @@ public class NightDirector : MonoBehaviour
     public float UiScale =>
         UiScaleSteps[Mathf.Clamp(UiScaleIndex, 0, UiScaleSteps.Length - 1)];
 
-    /// <summary>Размер того, что игрок печатает: подсказка действия и ответ на звонок.</summary>
+    /// <summary>Размер того, что игрок печатает в ответе на звонок.</summary>
     public static readonly float[] TypeInScaleSteps = { 0.8f, 1.0f, 1.2f, 1.4f, 1.6f };
     const string TypeInScalePref = "vnr.typeInScaleIndex";
 
@@ -62,12 +62,10 @@ public class NightDirector : MonoBehaviour
         (ActiveStation == StationTerminal && terminal != null && terminal.CapturingInput) ||
         (ActiveStation == StationMessenger && messenger != null && messenger.CapturingInput);
 
-    // прицел и система действий
-    public bool ActionVisible => action != null && action.HasTarget
-                                 && !string.IsNullOrEmpty(action.Prompt);
-    public string ActionPrompt => action != null ? action.Prompt : "";
-    public int ActionTyped => action != null ? action.TypedCount : 0;
-    public bool ActionRejected => action != null && action.RejectedRecently;
+    // прицел и взаимодействие
+    public bool InteractionVisible => interaction != null && interaction.HasTarget
+                                      && !string.IsNullOrEmpty(interaction.Label);
+    public string InteractionLabel => interaction != null ? interaction.Label : "";
 
     public string CyberCdText = "--:--";
     public bool CyberDanger;
@@ -118,7 +116,7 @@ public class NightDirector : MonoBehaviour
 
     TerminalApp terminal;
     MessengerApp messenger;
-    ActionSystem action;
+    InteractionSystem interaction;
     Interactable phoneInteractable;
     ScreenSurface terminalSurface, messengerSurface, laptopSurface;
     List<ScreenLine> laptopLines;
@@ -188,7 +186,7 @@ public class NightDirector : MonoBehaviour
         BuildTasks();
         BuildSchedule();
         BuildWorldBits();
-        BuildActionSystem();
+        BuildInteractionSystem();
         BuildOverlay();
 
         ActiveStation = StationTerminal;
@@ -421,23 +419,23 @@ public class NightDirector : MonoBehaviour
         if (phoneInteractable == null)
             phoneInteractable = phoneGo.AddComponent<Interactable>();
 
-        phoneInteractable.prompt = "PICK UP";
+        phoneInteractable.label = "E — взять трубку";
         phoneInteractable.available = false;
         phoneInteractable.maxDistance = 2.6f;
         phoneInteractable.Activated += OnPhoneAction;
     }
 
-    void BuildActionSystem()
+    void BuildInteractionSystem()
     {
         Camera cam = Camera.main;
         if (cam == null && Player != null && Player.cameraTransform != null)
             cam = Player.cameraTransform.GetComponent<Camera>();
         if (cam == null) return;
 
-        var go = new GameObject("ActionSystem");
+        var go = new GameObject("InteractionSystem");
         go.transform.SetParent(transform, false);
-        action = go.AddComponent<ActionSystem>();
-        action.Init(this, cam);
+        interaction = go.AddComponent<InteractionSystem>();
+        interaction.Init(this, cam);
     }
 
     void BuildPhoneAudio()
@@ -547,21 +545,17 @@ public class NightDirector : MonoBehaviour
             Player.lookEnabled = Running &&
                                  (modal == ModalKind.None || modal == ModalKind.Call);
 
-        // телефон обрабатываем раньше действий: в кадре PICK UP не должен
-        // попасть в поле ответа на звонок
+        // телефон обрабатываем раньше взаимодействий: E в ответе на звонок
+        // должна попасть в строку ввода, а не поднять трубку
         TickPhone();
-        UpdateActionPrompt();
-        if (action != null) action.Tick();
+        UpdatePhoneInteractable();
+        if (interaction != null) interaction.Tick();
 
         if (Running && modal == ModalKind.None)
         {
-            if (!ActionVisible)
-            {
-                if (terminal != null) terminal.Tick();
-                if (messenger != null) messenger.Tick();
-            }
+            if (terminal != null) terminal.Tick();
+            if (messenger != null) messenger.Tick();
 
-            // 1/2 не участвуют в подписи действия, поэтому работают и при прицеле
             HandleDeskInput();
         }
 
@@ -747,8 +741,6 @@ public class NightDirector : MonoBehaviour
                 Hint = "←→ каналы   ↑↓ прокрутка   ·   TAB — экран   ·   мышь — обзор";
                 break;
             case StationDesk:
-                // Подсказку PICK UP / HANG UP не дублируем в нижней строке:
-                // серая подпись появляется только когда прицел на телефоне.
                 string h = "1 — таблетка (" + State.pills + ")   ·   2 — диктофон";
                 if (recordingAvailable && !State.records[0]) h += " (новая запись)";
                 h += "   ·   TAB — экран   ·   мышь — обзор";
@@ -807,18 +799,18 @@ public class NightDirector : MonoBehaviour
 
     // ------------------------------------------------------------ действия
 
-    void UpdateActionPrompt()
+    void UpdatePhoneInteractable()
     {
         if (phoneInteractable == null) return;
 
         if (PhoneRinging)
         {
-            phoneInteractable.prompt = "PICK UP";
+            phoneInteractable.label = "E — взять трубку";
             phoneInteractable.available = true;
         }
         else if (PhoneInCall && callStage == 1)
         {
-            phoneInteractable.prompt = "HANG UP";
+            phoneInteractable.label = "E — положить трубку";
             phoneInteractable.available = true;
         }
         else
@@ -860,7 +852,7 @@ public class NightDirector : MonoBehaviour
         ringUntil = Time.time + 45f;
         if (ringSource != null) ringSource.Play();
         AddChat(ChatChannel.Boss, "ВИКТОР", "Звонок на стационарный.", Clock.Display);
-        ShowSubtitle("Телефон звонит. Наведите прицел и напечатайте PICK UP.", 3.5f);
+        ShowSubtitle("Телефон звонит. Наведите прицел и нажмите E.", 3.5f);
         DoFlash(Color.black, 0.3f, 0.2f);
     }
 
