@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-public enum ModalKind { None, Intro, Call, Dictaphone, Rest, Death, End, Settings }
+public enum ModalKind { None, Intro, Call, Dictaphone, Rest, Death, End, Settings, Credits, Epilogue }
 
 /// <summary>
 /// Ночь 1 «Смена»: часы, события, звонок шефа, тревога, бессонница,
@@ -22,8 +22,6 @@ public class NightDirector : MonoBehaviour
     public readonly List<TaskDef> Tasks = new List<TaskDef>();
     public readonly List<ChatMessage> Messages = new List<ChatMessage>();
     public readonly bool[] Unread = new bool[4];
-    /// <summary>Целевые файлы, уже скачанные с серверов сотрудников.</summary>
-    public readonly List<string> StolenFiles = new List<string>();
 
     public Font UiFont;
     public PlayerController Player;
@@ -86,6 +84,53 @@ public class NightDirector : MonoBehaviour
     public string EndTitle = "";
     public string[] EndLines = new string[0];
 
+    public string IntroTitle = "";
+
+    // Финальные экраны ночи 3: титры (happy end) и эпилог (провал).
+    public string[] CreditsLines =
+    {
+        "VOID: NO RETURN",
+        "",
+        "НОЧНАЯ СМЕНА · ФИНАЛ",
+        "",
+        "БРИК ЭД — ночной оператор ДИУ-2",
+        "ВИКТОР — шеф смены",
+        "ГАРМОНИЯ — утренний звонок",
+        "ТЕРРА",
+        "  pixel_reaper · kuzmich_73 · ZER0_ANN",
+        "",
+        "ДЦ-5 ЕКАТЕРИНБУРГ — вентиляция дожила до утра",
+        "ДЦ-7 ДИУ-2 — научил одного человека летать",
+        "ДЦ-11 МАГНИТОГОРСК — сирены наконец замолчали",
+        "",
+        "Спасибо за смену.",
+        "",
+        "R — переиграть ночь 3   ·   E — с самого начала",
+    };
+
+    public string[] EpilogueLines =
+    {
+        "ОТЧЁТ · НОЧЬ 3",
+        "",
+        "ДЦ-5 стоит. ДЦ-11 стоит.",
+        "ДЦ-7 стоит.",
+        "",
+        "ТЕРРА не переписалась. Дедлайн прошёл.",
+        "Данные лежат на серверах ДИУ-2, как лежали.",
+        "",
+        "В 06:58 Брик поднялся на крышу ДИУ-2.",
+        "Он всегда хотел уметь летать.",
+        "",
+        "Брик научился.",
+        "",
+        "R — переиграть ночь 3   ·   E — с самого начала",
+    };
+
+    /// <summary>Названия смен: интро, отчёты, финалы. Сборка = 3 ночи.</summary>
+    static readonly string[] NightTitles = { "СМЕНА", "ТЕРРА", "ТЕРМИНАЛЬНАЯ СТАДИЯ" };
+    static string TitleOf(int night) => "НОЧЬ " + Mathf.Clamp(night, 1, 3) +
+        " · «" + NightTitles[Mathf.Clamp(night - 1, 0, NightTitles.Length - 1)] + "»";
+
     // звонок
     public string CallLine = "";
     public string CallAnswer => callField.text;
@@ -111,6 +156,7 @@ public class NightDirector : MonoBehaviour
     ModalKind modal = ModalKind.Intro;
     static int retryNight = 1; // какая ночь перезапустится после R
     float introStart;
+    float creditsStart; // старт финального экрана (титры/эпилог)
     const float IntroDuration = 2.8f;
     bool settingsPrevInput;
 
@@ -136,6 +182,7 @@ public class NightDirector : MonoBehaviour
     GameObject pillsObj, dictaphoneObj;
     Vector3 dictaphoneHome;
     bool recordingAvailable;
+    int recordOfNight; // какая запись диктофона ждёт в эту ночь: 0..2
     float dictStart;
     float restStart = -1f;
     const float RestSeconds = 3.5f;
@@ -143,6 +190,7 @@ public class NightDirector : MonoBehaviour
     // Звонок шефа через несколько секунд после входа в терминал; < 0 — не запланирован.
     float callDelay = -1f;
     const float CallDelayAfterLogin = 3f;
+    int callNumber; // какой это звонок за смену (ночь 3 звонит трижды)
 
     float cyberCd = 300f;
     float logCleanReady;
@@ -161,11 +209,13 @@ public class NightDirector : MonoBehaviour
 
     void Start()
     {
-        int night = Mathf.Clamp(retryNight, 1, 5);
+        int night = Mathf.Clamp(retryNight, 1, 3);
         retryNight = 1;
-        State = GameState.NewGame();
-        State.ResetForNight(night);
+        State = Campaign.BeginNight(night);
         Clock.Reset();
+        recordOfNight = Mathf.Clamp(night - 1, 0, 2); // 1-я, 2-я или 3-я запись
+        callNumber = 0;
+        if (night >= 3) UnlockTerra(); // в ночь 3 форум открыт с самого начала
 
         Player = FindAnyObjectByType<PlayerController>();
         UiFont = MakeFont();
@@ -183,13 +233,18 @@ public class NightDirector : MonoBehaviour
         }
 
         BuildSurfaces();
-        BuildTasks();
-        BuildSchedule();
+        switch (night)
+        {
+            case 2: BuildTasks2(); BuildSchedule2(); break;
+            case 3: BuildTasks3(); BuildSchedule3(); break;
+            default: BuildTasks(); BuildSchedule(); break;
+        }
         BuildWorldBits();
         BuildInteractionSystem();
         BuildOverlay();
 
         ActiveStation = StationTerminal;
+        IntroTitle = TitleOf(night);
         introStart = Time.time;
         IntroAlpha = 1f;
         Debug.Log("[VNR] Entry point: NightDirector.Start · объект Game · Assets/Scenes/Office.unity · ночь " + night);
@@ -390,6 +445,273 @@ public class NightDirector : MonoBehaviour
         }));
     }
 
+    // ------------------------------------------------------------ ночи 2–3
+
+    // Реплики выбора ТЕРРА (ночь 2). 0 — «сговорчивая» ветка.
+    static readonly string[] ChoiceC1 =
+        { "есть. и я готов продать.", "кто вы вообще такие?", "ты с ума сошёл. я уборщик." };
+    static readonly string[] ChoiceC2 =
+        { "продам срочно. жду оффер.", "в цене сойдёмся?", "рынок честнее." };
+    static readonly string[] ChoiceC3 =
+        { "возьму. логи почистим.", "почему так дорого?", "мимо. слишком чисто для вас." };
+
+    /// <summary>Ночь 2 · «ТЕРРА»: сверка наряда, посты №15, заявка Джоэла.</summary>
+    void BuildTasks2()
+    {
+        Tasks.Clear();
+
+        TaskDef roster = new TaskDef(
+            TaskKind.Match,
+            "СВЕРКА НАРЯДА",
+            "ВВЕДИТЕ ID:",
+            "A-6643",
+            "ФРАГМЕНТ: «Наряд №8471 пропущен. Кому назначен?»",
+            "КАНДИДАТЫ (коды доступа):",
+            "  A-4471  Л. ДЭЛАЙЛА   код a-4471",
+            "  A-5120  Д. ДЖОЭЛ     код a-5120",
+            "  A-6643  К. КУПЛИНОВ  код a-6643");
+        roster.revealsCodes = true;
+        Tasks.Add(roster);
+
+        Tasks.Add(new TaskDef(
+            TaskKind.Sort,
+            "СОРТИРОВКА ПОСТОВ №15",
+            "РЕШЕНИЕ: PASS | PURGE | FLAG",
+            "PASS",
+            "ПОСТ #15 · 01:23 · ДИУ-2",
+            "«Заявка на замену вентиляции в ДЦ-11.",
+            " Шум жалоб. Влажность в норме.»",
+            "ПРИМЕЧАНИЕ: угроза сети?"));
+
+        Tasks.Add(new TaskDef(
+            TaskKind.Approve,
+            "ЗАЯВКА ДЖОЭЛА",
+            "ПОДТВЕРДИТЕ: APPROVE",
+            "APPROVE",
+            "СУБЪЕКТ: Д. Джоэл. Отпуск с 09:00.",
+            "ПРИЛОЖЕНО: 4 архивных лога ДЦ-7.",
+            "ОСНОВАНИЕ: «в море без интернета».",
+            "ОТПРАВИТЬ: APPROVE"));
+    }
+
+    /// <summary>Ночь 2: форум, офферы, выборы, глитч 04:12, запись № 2.</summary>
+    void BuildSchedule2()
+    {
+        events.Clear();
+
+        // 00:15 — форум появляется в браузере и сразу спрашивает.
+        events.Add(new Evt(15, () =>
+        {
+            UnlockTerra();
+            AddTerra("pixel_reaper", "гандекс. говорят, у тебя есть с сервера.");
+            AddTerra("pixel_reaper", "не молчи. терра всегда в сети.");
+            OpenChoice(ChoiceC1, pick =>
+            {
+                if (pick == 0)
+                {
+                    State.terraTrust = Mathf.Min(100, State.terraTrust + 15);
+                    AddTerra("pixel_reaper", "правильно. жди офферов.");
+                }
+                else if (pick == 1)
+                {
+                    AddTerra("pixel_reaper", "мы покупаем. нам плевать, кто ты.");
+                }
+                else
+                {
+                    State.terraTrust = Mathf.Max(0, State.terraTrust - 5);
+                    AddTerra("pixel_reaper", "уборщик с терминалом. конечно.");
+                }
+            });
+        }));
+
+        events.Add(new Evt(45, () => AddChat(ChatChannel.Team, "ДЭЛАЙЛА",
+            "Ночь длинная. Смена вторая — держись.", Clock.Display)));
+
+        events.Add(new Evt(100, () => // 01:40 — первый оффер
+        {
+            if (!State.filesSold.Contains("dc7_route.log"))
+            {
+                AddOffer("kuzmich_73", "dc7_route.log", 155);
+                AddTerra("kuzmich_73", "маршрут дц-7. даю по-божески.");
+            }
+            AddChat(ChatChannel.Team, "ДЖОЭЛ",
+                "у нас будто кто-то копается в сети. не?", Clock.Display);
+        }));
+
+        events.Add(new Evt(170, () => // 02:50 — второй оффер и торг
+        {
+            if (!State.filesSold.Contains("dc7_backup.key"))
+            {
+                AddOffer("pixel_reaper", "dc7_backup.key", 260);
+                AddTerra("pixel_reaper", "ключ бэкапа. дёшево? дёшево.");
+            }
+            AddAnxiety(5f);
+            OpenChoice(ChoiceC2, pick =>
+            {
+                if (pick == 0)
+                {
+                    State.terraTrust = Mathf.Min(100, State.terraTrust + 10);
+                    AddTerra("pixel_reaper", "быстрота мне нравится. жду файл.");
+                }
+                else if (pick == 1)
+                {
+                    AddTerra("pixel_reaper", "цена стоит на экране.");
+                }
+                else
+                {
+                    State.terraTrust = Mathf.Max(0, State.terraTrust - 5);
+                    AddTerra("pixel_reaper", "рынок — для лохов. твой выбор.");
+                }
+            });
+        }));
+
+        events.Add(new Evt(246, () => AddChat(ChatChannel.Security, "КИБЕРБЕЗОПАСНОСТЬ",
+            "ПЛАНОВАЯ ПРОВЕРКА ЛОГОВ: ЧИСТО.", Clock.Display)));
+
+        events.Add(new Evt(252, () => // 04:12 — глитч, как в ночь 1
+        {
+            AddChat(ChatChannel.Boss, "БРИК", "всё под контролем", "04:12");
+            DoFlash(Color.black, 0.55f, 0.35f);
+            AddAnxiety(8f);
+            Clock.Advance(6f);
+            if (State.pills > 0) State.pills--;
+            ShowSubtitle("Часы дёрнулись. В блистере на одну таблетку меньше.", 3.5f);
+            TickEvents();
+        }));
+
+        events.Add(new Evt(310, () => // 05:10 — ZER0_ANN: только с чистыми логами
+        {
+            if (!State.filesSold.Contains("dc7_final.key"))
+            {
+                AddOffer("ZER0_ANN", "dc7_final.key", 470, true);
+                AddTerra("ZER0_ANN", "финальный ключ. логи — кристалл, иначе разговор кончен.");
+            }
+            AddAnxiety(5f);
+            OpenChoice(ChoiceC3, pick =>
+            {
+                if (pick == 0)
+                {
+                    State.terraTrust = Mathf.Min(100, State.terraTrust + 15);
+                    AddTerra("ZER0_ANN", "чудесно. жду ключ и чистые логи.");
+                }
+                else if (pick == 1)
+                {
+                    AddTerra("ZER0_ANN", "коллекция не торгуется.");
+                }
+                else
+                {
+                    State.terraTrust = Mathf.Max(0, State.terraTrust - 10);
+                    AddTerra("ZER0_ANN", "вежливо. но зря.");
+                }
+            });
+        }));
+
+        events.Add(new Evt(330, MoveDictaphone)); // ~05:30 — запись № 2
+
+        events.Add(new Evt(380, () => // 06:20 — ТЕРРА уходит
+        {
+            AddTerra("ТЕРРА", "терра уходит спать. что продал — то продал.");
+            AddChat(ChatChannel.Boss, "ВИКТОР",
+                "Завтра отчёт по дата-центрам. Не подведи.", Clock.Display);
+        }));
+
+        events.Add(new Evt(400, () => AddChat(ChatChannel.Team, "КУПЛИНОВ",
+            "у нас в ДЦ-11 вентиляция ревёт будто умирает.", Clock.Display)));
+    }
+
+    /// <summary>Ночь 3 · «ТЕРМИНАЛЬНАЯ СТАДИЯ»: лицензии, пост-пророчество, эвакуация.</summary>
+    void BuildTasks3()
+    {
+        Tasks.Clear();
+
+        Tasks.Add(new TaskDef(
+            TaskKind.Match,
+            "ЛИЦЕНЗИИ ДЦ",
+            "ВВЕДИТЕ ИНДЕКС:",
+            "ДЦ-7",
+            "ФРАГМЕНТ: «Продлить лицензии узлов:",
+            "  ДЦ-5  ЕКАТЕРИНБУРГ · активна",
+            "  ДЦ-7  ДИУ-2 · ПРОСРОЧЕНА",
+            "  ДЦ-11 МАГНИТОГОРСК · активна»"));
+
+        Tasks.Add(new TaskDef(
+            TaskKind.Sort,
+            "УТРЕННИЕ ПОСТЫ",
+            "РЕШЕНИЕ: PASS | PURGE | FLAG",
+            "FLAG",
+            "ПОСТ #0407 · 05:12 · форум",
+            "«если посмотреть на ДЦ-7 в 06:50,",
+            " научишься летать»",
+            "ПРИМЕЧАНИЕ: паника или план?"));
+
+        Tasks.Add(new TaskDef(
+            TaskKind.Approve,
+            "ЭВАКУАЦИЯ ПО СПИСКУ 14",
+            "ПОДТВЕРДИТЕ: APPROVE",
+            "APPROVE",
+            "СУБЪЕКТ: список 14. ночная смена.",
+            "ОСНОВАНИЕ: тренировка эвакуации.",
+            "ПРИМЕЧАНИЕ: ДЦ-7 в списке нет.",
+            "ОТПРАВИТЬ: APPROVE"));
+    }
+
+    /// <summary>Ночь 3: три звонка, статус ДЦ, новости, дедлайн 06:00.</summary>
+    void BuildSchedule3()
+    {
+        events.Clear();
+
+        // 00:45 — ТЕРРА на связи, ждёт и докладывает, что офферы ещё живы.
+        events.Add(new Evt(60, () =>
+        {
+            UnlockTerra();
+            AddTerra("ТЕРРА", "терра в сети. жду остатки.");
+            AddTerra("pixel_reaper", "у нас дедлайн до шести.");
+            if (!State.filesSold.Contains("dc7_route.log"))
+                AddOffer("kuzmich_73", "dc7_route.log", 155);
+            if (!State.filesSold.Contains("dc7_backup.key"))
+                AddOffer("pixel_reaper", "dc7_backup.key", 260);
+            if (!State.filesSold.Contains("dc7_final.key"))
+                AddOffer("ZER0_ANN", "dc7_final.key", 470, true);
+            AddChat(ChatChannel.Team, "ДЭЛАЙЛА",
+                "сирены по всему кварталу. это учение?", Clock.Display);
+        }));
+
+        events.Add(new Evt(20, () => AddChat(ChatChannel.Team, "ДЖОЭЛ",
+            "я не выйду сегодня. не спрашивай.", Clock.Display)));
+
+        events.Add(new Evt(140, StartRinging)); // ~02:20 — звонок 2
+        events.Add(new Evt(300, StartRinging)); // ~05:00 — звонок 3
+
+        events.Add(new Evt(180, () => AddTerra("ТЕРРА",
+            "офферы живы. но время кончается.")));
+
+        events.Add(new Evt(246, () => AddChat(ChatChannel.Security, "КИБЕРБЕЗОПАСНОСТЬ",
+            "ПЛАНОВАЯ ПРОВЕРКА ЛОГОВ: ЧИСТО.", Clock.Display)));
+
+        events.Add(new Evt(252, () => // 04:12 — глитч, как раньше
+        {
+            AddChat(ChatChannel.Boss, "БРИК", "всё под контролем", "04:12");
+            DoFlash(Color.black, 0.55f, 0.35f);
+            AddAnxiety(8f);
+            Clock.Advance(6f);
+            if (State.pills > 0) State.pills--;
+            ShowSubtitle("Часы дёрнулись. В блистере на одну таблетку меньше.", 3.5f);
+            TickEvents();
+        }));
+
+        events.Add(new Evt(330, MoveDictaphone)); // ~05:30 — запись № 3
+
+        events.Add(new Evt(360, CheckMission)); // 06:00 — дедлайн ТЕРРА
+
+        events.Add(new Evt(410, () => // 06:50 — взрыв, если работа принята
+        {
+            if (State.missionReady) StartExplosion();
+        }));
+
+        events.Add(new Evt(400, () => AddChat(ChatChannel.Team, "КУПЛИНОВ",
+            "в ДЦ-11 свет мигает. совпадение?", Clock.Display)));
+    }
+
     void BuildWorldBits()
     {
         pillsObj = GameObject.Find("Pills");
@@ -507,9 +829,37 @@ public class NightDirector : MonoBehaviour
             return;
         }
 
+        // R — переиграть смену; финалы принимают и E/ENTER — «с самого начала».
         if (Input.GetKeyDown(KeyCode.R) &&
-            (modal == ModalKind.Death || modal == ModalKind.End))
+            (modal == ModalKind.Death || modal == ModalKind.End ||
+             modal == ModalKind.Credits || modal == ModalKind.Epilogue))
         {
+            if (modal == ModalKind.Credits || modal == ModalKind.Epilogue)
+                retryNight = Mathf.Max(1, State.night); // финальные титры → ночь 3
+            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+            return;
+        }
+
+        if (modal == ModalKind.Credits || modal == ModalKind.Epilogue)
+        {
+            if (Input.GetKeyDown(KeyCode.E) || Input.GetKeyDown(KeyCode.Return) ||
+                Input.GetKeyDown(KeyCode.KeypadEnter))
+            {
+                Campaign.Reset();
+                retryNight = 1;
+                SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+                return;
+            }
+        }
+
+        // Отчёт: E закрывает смену и открывает следующую ночь; снимок карьерных
+        // полей пишется только здесь — смерть посреди ночи его не трогает.
+        if (modal == ModalKind.End && State.night < 3 &&
+            (Input.GetKeyDown(KeyCode.E) || Input.GetKeyDown(KeyCode.Return) ||
+             Input.GetKeyDown(KeyCode.KeypadEnter)))
+        {
+            retryNight = State.night + 1;
+            Campaign.CommitNight(State, retryNight);
             SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
             return;
         }
@@ -529,7 +879,8 @@ public class NightDirector : MonoBehaviour
         }
 
         bool timeRuns = Running && modal != ModalKind.Death &&
-                        modal != ModalKind.End && modal != ModalKind.Settings;
+                        modal != ModalKind.End && modal != ModalKind.Settings &&
+                        modal != ModalKind.Credits && modal != ModalKind.Epilogue;
         if (timeRuns)
         {
             Clock.Tick(Time.deltaTime);
@@ -662,11 +1013,25 @@ public class NightDirector : MonoBehaviour
             }
         }
 
-        if (Clock.Finished) EndNight();
+        if (Clock.Finished)
+        {
+            // Ночь 3 заканчивается финалом, а не отчётом смены.
+            if (State.night >= 3) { if (exploded) EnterCredits(); else StartEpilogue(); }
+            else EndNight();
+        }
     }
 
     void TickCyberbez(float dt)
     {
+        // После взрыва сети нет, а сердце Брика — на паузе: смерть невозможна.
+        if (exploded)
+        {
+            cyberCd = 0f;
+            CyberCdText = "00:00";
+            CyberDanger = false;
+            return;
+        }
+
         cyberCd -= dt;
         if (cyberCd <= 0f)
         {
@@ -708,6 +1073,8 @@ public class NightDirector : MonoBehaviour
 
     void TickAnxiety(float dt)
     {
+        if (exploded) { VignetteAlpha = 0f; return; } // сеть умерла — тревога ушла
+
         float rate = 0.030f + 0.015f * Mathf.Max(0, State.insomnia - 1);
         // Кибербезы подходят к проверке, а в логах след — тревога растёт быстрее.
         if (State.dirtyLogs && CyberDanger) rate += 0.055f;
@@ -742,7 +1109,7 @@ public class NightDirector : MonoBehaviour
                 break;
             case StationDesk:
                 string h = "1 — таблетка (" + State.pills + ")   ·   2 — диктофон";
-                if (recordingAvailable && !State.records[0]) h += " (новая запись)";
+                if (recordingAvailable && !State.records[recordOfNight]) h += " (новая запись)";
                 h += "   ·   TAB — экран   ·   мышь — обзор";
                 Hint = h;
                 break;
@@ -851,9 +1218,30 @@ public class NightDirector : MonoBehaviour
         phone = PhoneState.Ringing;
         ringUntil = Time.time + 45f;
         if (ringSource != null) ringSource.Play();
+        callOpenLine = CallLineOf(State.night, callNumber);
+        callNumber++;
         AddChat(ChatChannel.Boss, "ВИКТОР", "Звонок на стационарный.", Clock.Display);
         ShowSubtitle("Телефон звонит. Наведите прицел и нажмите E.", 3.5f);
         DoFlash(Color.black, 0.3f, 0.2f);
+    }
+
+    string callOpenLine = "Брик. Это Виктор. Как смена?";
+
+    /// <summary>Первая реплика звонка: зависит от ночи и номера звонка.</summary>
+    static string CallLineOf(int night, int call)
+    {
+        if (night >= 3)
+        {
+            switch (call)
+            {
+                case 0: return "Брик. ДЦ-7 мигает. Стажёры жалуются.";
+                case 1: return "Твой трафик я вижу. Терра шумит.";
+                default: return "Иск подан. Терра в списках. И мы в списках.";
+            }
+        }
+        if (night == 2)
+            return "Брик. Ночью был доступ из ДИУ-2. Твой пропуск?";
+        return "Брик. Это Виктор. Как смена?";
     }
 
     void TickPhone()
@@ -890,7 +1278,7 @@ public class NightDirector : MonoBehaviour
         modal = ModalKind.Call;
         callStage = 0;
         callField.Clear();
-        CallLine = "Брик. Это Виктор. Как смена?";
+        CallLine = string.IsNullOrEmpty(callOpenLine) ? "Брик. Это Виктор. Как смена?" : callOpenLine;
         AddChat(ChatChannel.Boss, "ВИКТОР", "Звонок принят.", Clock.Display);
         if (Player != null) Player.inputEnabled = false;
     }
@@ -956,7 +1344,7 @@ public class NightDirector : MonoBehaviour
     void PlayDictaphone()
     {
         if (!recordingAvailable) { ShowSubtitle("Диктофон молчит.", 2f); return; }
-        if (State.records[0]) { ShowSubtitle("Больше записей нет.", 2f); return; }
+        if (State.records[recordOfNight]) { ShowSubtitle("Больше записей нет.", 2f); return; }
 
         modal = ModalKind.Dictaphone;
         dictStart = Time.time;
@@ -968,15 +1356,34 @@ public class NightDirector : MonoBehaviour
         if (modal != ModalKind.Dictaphone) return;
         float t = Time.time - dictStart;
 
-        if (t < 2.4f)
-            Subtitle = "ЗАПИСЬ 1 · 06:37";
-        else if (t < 7.0f)
-            Subtitle = "«Зачем ты это делаешь? У тебя есть работа. Нормальная работа».";
-        else if (t < 8.0f)
-            Subtitle = "Запись обрывается.";
-        else
+        // Ночь 1 — «Зачем ты это делаешь?»; ночь 2 — предостережение; ночь 3 — VOID.
+        switch (recordOfNight)
         {
-            State.records[0] = true;
+            case 1:
+                if (t < 2.4f) Subtitle = "ЗАПИСЬ 2 · 05:26";
+                else if (t < 7.6f) Subtitle =
+                    "«Ты не спишь уже неделю. Остановись, пока я прошу по-хорошему».";
+                else Subtitle = "Запись обрывается.";
+                break;
+
+            case 2:
+                if (t < 2.4f) Subtitle = "ЗАПИСЬ 3 · 05:58";
+                else if (t < 7.6f) Subtitle =
+                    "«Он не остановится. Хорошо. Пусть летит.»";
+                else Subtitle = "Запись обрывается.";
+                break;
+
+            default:
+                if (t < 2.4f) Subtitle = "ЗАПИСЬ 1 · 06:37";
+                else if (t < 7.0f) Subtitle =
+                    "«Зачем ты это делаешь? У тебя есть работа. Нормальная работа».";
+                else Subtitle = "Запись обрывается.";
+                break;
+        }
+
+        if (t >= 8.2f)
+        {
+            State.records[recordOfNight] = true;
             modal = ModalKind.None;
             if (Player != null) Player.inputEnabled = true;
             AddAnxiety(4f);
@@ -1096,20 +1503,26 @@ public class NightDirector : MonoBehaviour
 
     // ------------------------------------------------------------ данные и логи
 
-    /// <summary>Целевой файл скачан — его можно продать на теневом рынке.</summary>
+    /// <summary>Целевой файл скачан с сервера сотрудника — его можно продать.</summary>
     public void RegisterStolenFile(string name)
     {
         if (string.IsNullOrEmpty(name)) return;
-        if (!StolenFiles.Contains(name)) StolenFiles.Add(name);
+        // файл, проданный на прошлой ночи, не должен снова попасть в продажу
+        if (State.filesSold.Contains(name)) return;
+        if (!State.filesTaken.Contains(name)) State.filesTaken.Add(name);
     }
 
     /// <summary>Продать файл; false, если такого файла нет.</summary>
     public bool SellStolenFile(string name, int price)
     {
-        if (!StolenFiles.Remove(name)) return false;
+        if (!State.filesTaken.Remove(name)) return false;
+        if (!State.filesSold.Contains(name)) State.filesSold.Add(name);
         State.credits += Mathf.Max(0, price);
         return true;
     }
+
+    /// <summary>Файл уже продан через какой-то канал.</summary>
+    public bool HasSoldFile(string name) => State.filesSold.Contains(name);
 
     /// <summary>Кулдаун очистки логов, секунды.</summary>
     public float LogCleanCooldown => Mathf.Max(0f, logCleanReady - Time.time);
@@ -1137,11 +1550,155 @@ public class NightDirector : MonoBehaviour
         flashUntil = Time.time + seconds;
     }
 
+    // ------------------------------------------------------------ ТЕРРА · форум
+
+    public readonly List<ForumPost> TerraPosts = new List<ForumPost>();
+    public readonly List<TerraOffer> TerraOffers = new List<TerraOffer>();
+    public bool TerraUnlocked; // форум появился в браузере (событие ночи 2)
+    public bool exploded;      // ночь 3, 06:50: дата-центры упали
+
+    public string[] ChoiceOptions; // null — открытого выбора нет
+    public int ChoiceIndex;
+    System.Action<int> onChoice;
+
+    /// <summary>Форум ждёт реплику: выбор в браузере, на странице форума.</summary>
+    public bool ChoiceActive => ChoiceOptions != null;
+
+    /// <summary>Добавить форум в браузер (событие смены).</summary>
+    public void UnlockTerra() => TerraUnlocked = true;
+
+    /// <summary>Реплика покупателя на форуме.</summary>
+    public void AddTerra(string sender, string text)
+    {
+        TerraPosts.Add(new ForumPost(sender, text, Clock != null ? Clock.Display : "00:00"));
+    }
+
+    /// <summary>Новый оффер покупателя; file "" — «любой скачанный файл».</summary>
+    public void AddOffer(string buyer, string file, int price, bool requiresClean = false)
+    {
+        TerraOffers.Add(new TerraOffer(buyer, file, price, requiresClean));
+        ShowSubtitle("В браузере новый оффер ТЕРРА.", 3.5f);
+    }
+
+    /// <summary>Открыть выбор реплики: терминал сам перейдёт на форум.</summary>
+    public void OpenChoice(string[] options, System.Action<int> cb)
+    {
+        ChoiceOptions = options;
+        ChoiceIndex = 0;
+        onChoice = cb;
+        ShowSubtitle("ТЕРРА ждёт ответа. Откройте форум в браузере.", 4.5f);
+    }
+
+    /// <summary>Ответ игрока (Enter на форуме): выбор уходит в обработчик.</summary>
+    public void SubmitChoice()
+    {
+        if (ChoiceOptions == null) return;
+        int pick = Mathf.Clamp(ChoiceIndex, 0, ChoiceOptions.Length - 1);
+        System.Action<int> cb = onChoice;
+        ChoiceOptions = null;
+        onChoice = null;
+        if (cb != null) cb(pick);
+    }
+
+    /// <summary>Прямая продажа покупателю ТЕРРА. false — отказ с репликой на форуме.</summary>
+    public bool SellToTerra(TerraOffer o)
+    {
+        if (o == null || o.done) return false;
+
+        // «Любой файл» (kuzmich_73): берём первый скачанный.
+        string file = o.file;
+        if (string.IsNullOrEmpty(file) && State.filesTaken.Count > 0)
+            file = State.filesTaken[0];
+
+        if (string.IsNullOrEmpty(file) || !State.filesTaken.Contains(file))
+        {
+            AddTerra(o.buyer, "файл-то где? приходи с файлом.");
+            return false;
+        }
+        if (o.requiresClean && (State.dirtyLogs || State.suspicion > 25))
+        {
+            AddTerra(o.buyer, "руки у тебя немытые. разберись с логами.");
+            return false;
+        }
+
+        o.done = true;
+        State.filesTaken.Remove(file);
+        if (!State.filesSold.Contains(file)) State.filesSold.Add(file);
+        State.credits += Mathf.Max(0, o.price);
+        State.deals++;
+        State.terraTrust = Mathf.Min(100, State.terraTrust + 10);
+        AddTerra(o.buyer, "чисто. +" + o.price + " кр. работа принята.");
+        return true;
+    }
+
+    // ------------------------------------------------------------ финалы ночи 3
+
+    /// <summary>06:00 ночь 3: принята ли работа ТЕРРА к дедлайну.</summary>
+    void CheckMission()
+    {
+        State.missionReady = SoldTargets() >= 3 && State.deals >= 1;
+        if (State.missionReady)
+        {
+            AddTerra("ТЕРРА", "работа принята. в 06:50.");
+            AddTerra("pixel_reaper", "отойди от окон, брик.");
+            ShowSubtitle("ТЕРРА: «работа принята. в 06:50».", 4.5f);
+        }
+        else
+        {
+            AddTerra("ТЕРРА", "дедлайн. терра не ждёт.");
+            ShowSubtitle("ТЕРРА: «дедлайн. терра не ждёт».", 4.5f);
+        }
+    }
+
+    /// <summary>06:50: дата-центры падают. Смерть и загрузки после этого невозможны.</summary>
+    void StartExplosion()
+    {
+        if (exploded) return;
+        exploded = true;
+        DoFlash(Color.white, 0.9f, 1.4f);
+        AddAnxiety(-20f);
+        AddChat(ChatChannel.Security, "КИБЕРБЕЗОПАСНОСТЬ",
+            "АВАРИЯ НА ПЛОЩАДКЕ ДЦ-7. ЭВАКУАЦИЯ ПО СПИСКУ 14.", Clock.Display);
+        AddChat(ChatChannel.Boss, "ВИКТОР", "что за…?!", Clock.Display);
+        AddTerra("ТЕРРА", "красиво. терра прощается.");
+        AddTerra("pixel_reaper", "у нас с тобой всё, брик. лети.");
+        ShowSubtitle("Окно светит белым. Потом — гром.", 4.5f);
+    }
+
+    void EnterCredits()
+    {
+        if (modal == ModalKind.Credits) return;
+        if (ringSource != null) ringSource.Stop();
+        phone = PhoneState.Idle;
+        modal = ModalKind.Credits;
+        creditsStart = Time.time;
+        Running = false;
+        Clock.running = false;
+        if (Player != null) Player.inputEnabled = false;
+        Debug.Log("[VNR] ФИНАЛ: титры · ночь 3 закрыта с миссией ТЕРРА.");
+    }
+
+    void StartEpilogue()
+    {
+        if (modal == ModalKind.Epilogue) return;
+        if (ringSource != null) ringSource.Stop();
+        phone = PhoneState.Idle;
+        modal = ModalKind.Epilogue;
+        creditsStart = Time.time;
+        Running = false;
+        Clock.running = false;
+        if (Player != null) Player.inputEnabled = false;
+        Debug.Log("[VNR] ФИНАЛ: эпилог · миссия ТЕРРА провалена.");
+    }
+
+    /// <summary>Точка отсчёта финального экрана (титры/эпилог — плавное появление).</summary>
+    public float CreditsStart => creditsStart;
+
     // ------------------------------------------------------------ проигрыш / конец
 
     void StartDeath()
     {
-        if (modal == ModalKind.Death) return;
+        if (modal == ModalKind.Death || exploded) return; // после взрыва смерти нет
         retryNight = State.night;
         if (ringSource != null) ringSource.Stop();
         phone = PhoneState.Idle;
@@ -1217,30 +1774,66 @@ public class NightDirector : MonoBehaviour
                 State.trust[i] = Mathf.Max(0, State.trust[i] - 5);
 
         EndTitle = "07:00 · КОНЕЦ СМЕНЫ";
-        EndLines = new[]
+        EndLines = BuildEndLines(State.night);
+    }
+
+    /// <summary>Строки отчёта смены; хвост — подсказки перехода между ночами.</summary>
+    string[] BuildEndLines(int night)
+    {
+        var lines = new List<string>
         {
-            "НОЧЬ 1 · «СМЕНА»",
+            TitleOf(night),
             "",
             "Задачи: " + TasksDone + "/" + Tasks.Count,
             "План: разведка ДЦ-7 — " + (State.planStep > 0 ? "выполнена" : "не выполнена"),
             "Тревога: " + Mathf.RoundToInt(State.anxiety) + "%",
             "Таблеток осталось: " + State.pills,
-            "Записей прослушано: " + (State.records[0] ? "1" : "0"),
+            "Записей прослушано: " + RecordsListened(),
             "Бессонница: " + State.insomnia + "/5",
             State.moodAnswered
                 ? "ГАРМОНИЯ записала настроение: " + State.moodStart + "/10"
                 : "ГАРМОНИЯ не получила оценку настроения",
             "",
-            "Доверие: Джоэл " + State.trust[0] +
-                " · Дэлайла " + State.trust[1] +
-                " · Куплинов " + State.trust[2],
-            "",
-            AllTasksDone()
-                ? "Смена закрыта. Виктор доволен."
-                : "Задачи не закрыты. Утром — выговор.",
-            "",
-            "R — переиграть ночь",
-            "Ночь 2 «Первый код» — в следующей сборке.",
+            "Кредиты: " + State.credits,
         };
+
+        // ТЕРРА-счётчик: с ночи 2 покупатели — часть смены.
+        if (night >= 2)
+        {
+            lines.Add("ТЕРРА: сделок " + State.deals +
+                      " · доверие " + State.terraTrust + "%");
+            lines.Add("Продано целевых: " + SoldTargets() + "/3");
+        }
+
+        lines.Add("");
+        lines.Add("Доверие: Джоэл " + State.trust[0] +
+                  " · Дэлайла " + State.trust[1] +
+                  " · Куплинов " + State.trust[2]);
+        lines.Add("");
+        lines.Add(AllTasksDone()
+            ? "Смена закрыта. Виктор доволен."
+            : "Задачи не закрыты. Утром — выговор.");
+        lines.Add("");
+        if (night < 3) lines.Add("E — следующая ночь");
+        lines.Add("R — переиграть ночь");
+        return lines.ToArray();
+    }
+
+    /// <summary>Сколько записей диктофона прослушано.</summary>
+    int RecordsListened()
+    {
+        int n = 0;
+        for (int i = 0; i < State.records.Length; i++) if (State.records[i]) n++;
+        return n;
+    }
+
+    /// <summary>Сколько из трёх целевых файлов ДЦ-7 продано. Отчёты и финал.</summary>
+    public int SoldTargets()
+    {
+        var targets = new[] { "dc7_route.log", "dc7_backup.key", "dc7_final.key" };
+        int n = 0;
+        for (int i = 0; i < targets.Length; i++)
+            if (State.filesSold.Contains(targets[i])) n++;
+        return n;
     }
 }

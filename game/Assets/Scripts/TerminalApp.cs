@@ -183,7 +183,8 @@ public class TerminalApp
     readonly HashSet<string> downloaded = new HashSet<string>();
 
     int desktopSel;
-    int browserPage;       // 0 — старт, 1 — теневой рынок, 2 — справка
+    int browserPage;       // 0 — старт, 1 — рынок, 2 — справка, 3 — форум ТЕРРА,
+                           // 4 — статус ДЦ и 5 — новости (ночь 3)
     int browserSel;
     string browserMsg = "";
     float browserMsgUntil;
@@ -268,6 +269,8 @@ public class TerminalApp
                 break;
 
             case Mode.Browser:
+                // Форум принимает реплику сразу: выбор перекрывает навигацию.
+                if (browserPage != 3 && dir.ChoiceActive) browserPage = 3;
                 if (back)
                 {
                     if (browserPage != 0) browserPage = 0;
@@ -276,22 +279,47 @@ public class TerminalApp
                 }
                 if (browserPage == 0)
                 {
-                    if (Input.GetKeyDown(KeyCode.UpArrow)) browserSel = WrapIndex(browserSel - 1, 2);
-                    if (Input.GetKeyDown(KeyCode.DownArrow)) browserSel = WrapIndex(browserSel + 1, 2);
+                    List<int> pages = BrowserPages();
+                    if (Input.GetKeyDown(KeyCode.UpArrow))
+                        browserSel = WrapIndex(browserSel - 1, pages.Count);
+                    if (Input.GetKeyDown(KeyCode.DownArrow))
+                        browserSel = WrapIndex(browserSel + 1, pages.Count);
                     if (enter)
                     {
-                        browserPage = browserSel + 1;
+                        browserPage = pages[Mathf.Clamp(browserSel, 0, pages.Count - 1)];
                         browserSel = 0;
                     }
                 }
                 else if (browserPage == 1)
                 {
-                    int files = dir.StolenFiles.Count;
+                    int files = dir.State.filesTaken.Count;
                     if (files > 0)
                     {
                         if (Input.GetKeyDown(KeyCode.UpArrow)) browserSel = WrapIndex(browserSel - 1, files);
                         if (Input.GetKeyDown(KeyCode.DownArrow)) browserSel = WrapIndex(browserSel + 1, files);
                         if (enter) SellSelectedData();
+                    }
+                    else browserSel = 0;
+                }
+                else if (browserPage == 3)
+                {
+                    if (dir.ChoiceActive)
+                    {
+                        int n = dir.ChoiceOptions.Length;
+                        if (Input.GetKeyDown(KeyCode.UpArrow)) dir.ChoiceIndex = WrapIndex(dir.ChoiceIndex - 1, n);
+                        if (Input.GetKeyDown(KeyCode.DownArrow)) dir.ChoiceIndex = WrapIndex(dir.ChoiceIndex + 1, n);
+                        // цифры 1..9 — прямой выбор реплики
+                        for (int k = 0; k < Mathf.Min(n, 9); k++)
+                            if (Input.GetKeyDown(KeyCode.Alpha1 + k)) dir.ChoiceIndex = k;
+                        if (enter) dir.SubmitChoice();
+                        break; // CTRL+C во время выбора не работает: ТЕРРА ждёт
+                    }
+                    int offers = dir.TerraOffers.Count;
+                    if (offers > 0)
+                    {
+                        if (Input.GetKeyDown(KeyCode.UpArrow)) browserSel = WrapIndex(browserSel - 1, offers);
+                        if (Input.GetKeyDown(KeyCode.DownArrow)) browserSel = WrapIndex(browserSel + 1, offers);
+                        if (enter) SellTerraSelected();
                     }
                     else browserSel = 0;
                 }
@@ -532,6 +560,14 @@ public class TerminalApp
         }
         else if (cmd.StartsWith("connect"))
         {
+            // После взрыва серверов больше нет.
+            if (dir.exploded)
+            {
+                outLog.Add("СЕТЬ ПОГИБЛА. СОЕДИНЕНИЙ НЕТ.");
+                while (outLog.Count > 9) outLog.RemoveAt(0);
+                return;
+            }
+
             string arg = cmd.Substring("connect".Length).Trim();
             int idx = -1;
             for (int i = 0; i < Servers.Length; i++)
@@ -664,6 +700,18 @@ public class TerminalApp
     {
         if (downloadFile == null || dir == null) return;
 
+        // После взрыва сети нет: загрузка обрывается сама.
+        if (dir.exploded)
+        {
+            string dead = downloadFile;
+            downloadFile = null;
+            downloadProgress = 0f;
+            downloadHeat = 0f;
+            outLog.Add("СЕТЬ ПОГИБЛА: " + dead + " недоступен.");
+            while (outLog.Count > 9) outLog.RemoveAt(0);
+            return;
+        }
+
         float rate = 0.045f * downloadSpeed;
         downloadProgress = Mathf.Min(1f, downloadProgress + rate * dt);
 
@@ -693,9 +741,17 @@ public class TerminalApp
         outLog.Add("СКАЧАНО: " + name);
         if (file != null && file.target)
         {
-            dir.RegisterStolenFile(name);
-            outLog.Add("ЦЕЛЕВОЙ ФАЙЛ ПОЛУЧЕН.");
-            dir.ShowSubtitle("Данные получены: " + name, 2.5f);
+            if (dir.HasSoldFile(name))
+            {
+                // Уже продан (ночь 2+): перепродажа того же файла невозможна.
+                outLog.Add("ФАЙЛ УЖЕ ПРОДАН. ТЕРМИНАЛ МОЛЧИТ.");
+            }
+            else
+            {
+                dir.RegisterStolenFile(name);
+                outLog.Add("ЦЕЛЕВОЙ ФАЙЛ ПОЛУЧЕН.");
+                dir.ShowSubtitle("Данные получены: " + name, 2.5f);
+            }
         }
         while (outLog.Count > 9) outLog.RemoveAt(0);
     }
@@ -948,12 +1004,13 @@ public class TerminalApp
 
     void RenderDesktop(List<ScreenLine> L)
     {
-        L.Add(new ScreenLine(
-            "ТРЕВОГА " + Mathf.RoundToInt(dir.State.anxiety) + "%" +
-            "   СЛЕД " + dir.State.suspicion + "%" +
-            "   КР " + dir.State.credits +
-            "   ЛОГИ: " + (dir.State.dirtyLogs ? "ГРЯЗНЫЕ" : "ЧИСТО"),
-            dir.State.dirtyLogs ? Warn : Dim));
+        string status = "ТРЕВОГА " + Mathf.RoundToInt(dir.State.anxiety) + "%" +
+                        "   СЛЕД " + dir.State.suspicion + "%" +
+                        "   КР " + dir.State.credits +
+                        "   ЛОГИ: " + (dir.State.dirtyLogs ? "ГРЯЗНЫЕ" : "ЧИСТО");
+        // С ночи 2 ТЕРРА — часть смены: в столе виден счёт целевых файлов.
+        if (dir.State.night >= 2) status += "   ПРОДАНО " + dir.SoldTargets() + "/3";
+        L.Add(new ScreenLine(status, dir.State.dirtyLogs ? Warn : Dim));
 
         int tileW = Mathf.Max(12, (s.Cols - 2) / 3);
         string top = "┌" + new string('─', tileW - 2) + "┐";
@@ -983,14 +1040,24 @@ public class TerminalApp
     {
         if (browserPage == 0)
         {
+            List<int> pages = BrowserPages();
             L.Add(new ScreenLine("БРАУЗЕР · GANDEX NET", White));
             L.Add(new ScreenLine("", C));
-            L.Add(new ScreenLine((browserSel == 0 ? "▸ " : "  ") + "[1] ТЕНЕВОЙ РЫНОК",
-                                 browserSel == 0 ? White : C));
-            L.Add(new ScreenLine((browserSel == 1 ? "▸ " : "  ") + "[2] КАК ЭТО РАБОТАЕТ",
-                                 browserSel == 1 ? White : C));
+            for (int i = 0; i < pages.Count; i++)
+            {
+                bool sel = browserSel == i || browserSel >= pages.Count;
+                L.Add(new ScreenLine((sel ? "▸ " : "  ") +
+                                     "[" + pages[i] + "] " + BrowserPageTitle(pages[i]),
+                                     sel ? White : C));
+            }
             L.Add(new ScreenLine("", C));
             L.Add(new ScreenLine("ENTER — открыть   CTRL+C — назад", Dim));
+            return;
+        }
+
+        if (browserPage == 3)
+        {
+            RenderTerra(L);
             return;
         }
 
@@ -999,7 +1066,7 @@ public class TerminalApp
             L.Add(new ScreenLine("БРАУЗЕР · ТЕНЕВОЙ РЫНОК   КР " + dir.State.credits, White));
             L.Add(new ScreenLine("", C));
 
-            int n = dir.StolenFiles.Count;
+            int n = dir.State.filesTaken.Count;
             if (n == 0)
             {
                 L.Add(new ScreenLine("НЕТ ДАННЫХ НА ПРОДАЖУ.", Dim));
@@ -1011,7 +1078,7 @@ public class TerminalApp
                 int start = Mathf.Max(0, browserSel - maxRows + 1);
                 for (int i = start; i < n && i < start + maxRows; i++)
                 {
-                    string name = dir.StolenFiles[i];
+                    string name = dir.State.filesTaken[i];
                     string line = (i == browserSel ? "▸ " : "  ") + name +
                                   "   " + MarketPrice(name) + " кр.";
                     L.Add(new ScreenLine(line, i == browserSel ? White : C));
@@ -1026,6 +1093,18 @@ public class TerminalApp
             return;
         }
 
+        // Ночь 3: статус дата-центров и новости.
+        if (browserPage == 4)
+        {
+            RenderDCStatus(L);
+            return;
+        }
+        if (browserPage == 5)
+        {
+            RenderNews(L);
+            return;
+        }
+
         L.Add(new ScreenLine("БРАУЗЕР · КАК ЭТО РАБОТАЕТ", White));
         L.Add(new ScreenLine("", C));
         L.Add(new ScreenLine("1. ТЕРМ. → connect <код>", C));
@@ -1037,8 +1116,217 @@ public class TerminalApp
         L.Add(new ScreenLine("ENTER / CTRL+C — назад", Dim));
     }
 
+    /// <summary>Страница 3: теневой форум ТЕРРА — лента, офферы, выбор реплики.</summary>
+    void RenderTerra(List<ScreenLine> L)
+    {
+        bool choice = dir.ChoiceActive;
+        L.Add(new ScreenLine("БРАУЗЕР · ТЕНЕВОЙ ФОРУМ «ТЕРРА»   КР " + dir.State.credits, White));
+        L.Add(new ScreenLine("", C));
+
+        // Лента: последние посты, сколько влезает.
+        int maxPosts = choice ? 3 : Mathf.Max(2, (s.Rows - 9) / 2);
+        int shown = 0;
+        for (int i = dir.TerraPosts.Count - 1; i >= 0 && shown < maxPosts; i--, shown++)
+        {
+            ForumPost p = dir.TerraPosts[i];
+            L.Add(new ScreenLine("  " + p.sender + " · " + p.time, Dim));
+            L.Add(new ScreenLine("  " + p.text, C));
+        }
+        if (dir.TerraPosts.Count == 0)
+            L.Add(new ScreenLine("  лента пуста. пока никто не пишет.", Dim));
+
+        L.Add(new ScreenLine(new string('─', Mathf.Max(2, s.Cols - 1)), Lines));
+
+        if (choice)
+        {
+            L.Add(new ScreenLine("ТЕРРА ЖДЁТ ОТВЕТА:", White));
+            for (int i = 0; i < dir.ChoiceOptions.Length; i++)
+            {
+                bool sel = dir.ChoiceIndex == i;
+                L.Add(new ScreenLine((sel ? "▸ " : "  ") + "[" + (i + 1) + "] " + dir.ChoiceOptions[i],
+                                     sel ? White : C));
+            }
+            L.Add(new ScreenLine("↑↓ / 1.." + dir.ChoiceOptions.Length + " — реплика   ENTER — ответить", Dim));
+            return;
+        }
+
+        int offers = dir.TerraOffers.Count;
+        if (offers == 0)
+        {
+            L.Add(new ScreenLine("ОФФЕРОВ НЕТ. ЖДИ ПОКУПАТЕЛЕЙ.", Dim));
+        }
+        else
+        {
+            int maxRows = Mathf.Max(1, s.Rows - 9);
+            int start = Mathf.Max(0, browserSel - maxRows + 1);
+            for (int i = start; i < offers && i < start + maxRows; i++)
+            {
+                TerraOffer o = dir.TerraOffers[i];
+                string name = string.IsNullOrEmpty(o.file) ? "любой файл" : o.file;
+                string line = (i == browserSel ? "▸ " : "  ") + o.buyer + " · " + name +
+                              " · " + o.price + " кр." + (o.requiresClean ? " · нужен чистый" : "");
+                L.Add(new ScreenLine(line, o.done ? Dim : (i == browserSel ? White : C)));
+            }
+        }
+
+        if (!string.IsNullOrEmpty(browserMsg) && Time.time < browserMsgUntil)
+            L.Add(new ScreenLine(browserMsg, C));
+        else
+            L.Add(new ScreenLine("", C));
+        L.Add(new ScreenLine("↑↓ офферы   ENTER — продать   CTRL+C — назад", Dim));
+    }
+
+    class DcLine
+    {
+        public int minute; // игровая минута смены, с которой строка видна
+        public string text;
+        public bool alarm;
+        public DcLine(int minute, string text, bool alarm = false)
+        {
+            this.minute = minute;
+            this.text = text;
+            this.alarm = alarm;
+        }
+    }
+
+    // СТАТУС ДЦ (ночь 3, страница 4). ДЦ-7 — «свой»: строки зависят от того,
+    // сколько целевых файлов продано (dir.SoldTargets).
+    static readonly DcLine[] Dc5Rows =
+    {
+        new DcLine(5, "СЕКТОР A: норма · 62 ТБ/ч"),
+        new DcLine(80, "СЕКТОР B: +11% нагрузки"),
+        new DcLine(170, "ВЕНТИЛЯЦИЯ: предупреждение"),
+        new DcLine(260, "ВЕНТИЛЯЦИЯ: аварийный контур"),
+        new DcLine(355, "ВЛАЖНОСТЬ 43% · РАСХОЖДЕНИЕ", true),
+        new DcLine(405, "ПОЖАРНЫЙ КОНТУР: ЗАПРОС К СОСЕДЯМ", true),
+    };
+
+    static readonly DcLine[] Dc11Rows =
+    {
+        new DcLine(10, "ВЕНТИЛЯЦИЯ: шум жалоб"),
+        new DcLine(150, "ЗАМЕНА ВЕНТИЛЯЦИИ: ОТКЛОНЕНА"),
+        new DcLine(240, "ВЛАЖНОСТЬ: в норме"),
+        new DcLine(330, "ШУМ: «будто умирает»"),
+        new DcLine(390, "ПРОСЛУШКА: сирены внутри", true),
+    };
+
+    /// <summary>Страница 4: три дата-центра; строки появляются под время смены.</summary>
+    void RenderDCStatus(List<ScreenLine> L)
+    {
+        L.Add(new ScreenLine("БРАУЗЕР · СТАТУС ДЦ   " + dir.Clock.Display, White));
+        L.Add(new ScreenLine("", C));
+
+        int m = dir.Clock.WholeMinutes;
+        bool down = dir.exploded;
+
+        RenderDc(L, "ДЦ-5 · ЕКАТЕРИНБУРГ", Dc5Rows, m, down);
+        RenderDc7(L, m, down);
+        RenderDc(L, "ДЦ-11 · МАГНИТОГОРСК", Dc11Rows, m, down);
+
+        L.Add(new ScreenLine("", C));
+        L.Add(new ScreenLine(down ? "СВЯЗЬ С ПОЛИГОНОМ ПОТЕРЯНА." : "обновление: раз в минуту", Dim));
+        L.Add(new ScreenLine("CTRL+C — к списку страниц", Dim));
+    }
+
+    static void RenderDc(List<ScreenLine> L, string title, DcLine[] rows, int m, bool down)
+    {
+        if (down)
+        {
+            L.Add(new ScreenLine(title, Err));
+            L.Add(new ScreenLine("  ███ НЕДОСТУПНО ███", Err));
+            return;
+        }
+        L.Add(new ScreenLine(title, White));
+        for (int i = 0; i < rows.Length; i++)
+            if (rows[i].minute <= m)
+                L.Add(new ScreenLine("  " + rows[i].text, rows[i].alarm ? Warn : C));
+    }
+
+    void RenderDc7(List<ScreenLine> L, int m, bool down)
+    {
+        if (down)
+        {
+            L.Add(new ScreenLine("ДЦ-7 · ДИУ-2", Err));
+            L.Add(new ScreenLine("  ███ НЕДОСТУПНО ███", Err));
+            return;
+        }
+
+        int sold = dir.SoldTargets();
+        L.Add(new ScreenLine("ДЦ-7 · ДИУ-2 · ПРОСРОЧЕНА", White));
+        if (m >= 5) L.Add(new ScreenLine("  СЕКТОР 7: шлюз B · активен", C));
+        if (m >= 100)
+            L.Add(new ScreenLine(sold > 0 ? "  ВНИМАНИЕ: ЧУЖОЙ ТРАФИК В ШЛЮЗЕ" : "  ТРАФИК: в норме",
+                                 sold > 0 ? Warn : C));
+        if (m >= 200 && sold >= 2)
+            L.Add(new ScreenLine("  КОНТУР: ДЕРЕЙСТВОВАН НА 2/3", Warn));
+        if (m >= 260 && sold >= 3)
+            L.Add(new ScreenLine("  КОНТУР ОТКРЫТ. УПРАВЛЕНИЕ: ЧУЖОЕ.", Warn));
+        if (m >= 340)
+            L.Add(new ScreenLine("  ЛИЦЕНЗИЯ: ПРОСРОЧЕНА · ПРОДЛЕНИЕ ОТКЛОНЕНО", Warn));
+        if (m >= 400)
+            L.Add(new ScreenLine("  ТЕХ ПЕРСОНАЛ: НЕ ЯВКА", Warn));
+    }
+
+    class NewsRow
+    {
+        public int minute;
+        public string text;
+        public NewsRow(int minute, string text)
+        {
+            this.minute = minute;
+            this.text = text;
+        }
+    }
+
+    // НОВОСТИ (ночь 3, страница 5). Функция времени: минута пришла — новость есть.
+    static readonly NewsRow[] NewsRows =
+    {
+        new NewsRow(8, "ГАНДЕКС НЕЙРО: «ночь — время чистых логов»"),
+        new NewsRow(50, "КУРС ДОШИРАКА +4% · ГАНДЕКС-ИНДЕКС"),
+        new NewsRow(110, "ГАНДЕКС ГОТОВИТ СПИСКИ «ТЕРРА»"),
+        new NewsRow(160, "ВИКТОР Ч. ПРОДАЛ ДОЛЮ В ДЦ-5 ЗА ДОШИРАК"),
+        new NewsRow(210, "ДЦ-7: ПЕРЕРАСЧЁТ ЛИЦЕНЗИЙ (ПРОСРОЧКА)"),
+        new NewsRow(270, "ПОЖАРНЫЕ ВЕРТОЛЁТЫ ПАТРУЛИРУЮТ МАГНИТОГОРСК"),
+        new NewsRow(340, "СТАЖЁРЫ ДИУ-2: «МИГАЮЩИЙ СВЕТ»"),
+        new NewsRow(390, "СЕТЬ СБОИТ В ТРЁХ УЗЛАХ"),
+        new NewsRow(411, "ВСПЫШКА НАД ДИУ-2. ДЦ-7 НЕДОСТУПЕН"),
+        new NewsRow(415, "ГАНДЕКС: «ВРЕМЕННЫЙ СБОЙ. ДОШИРАК ПОДОРОЖАЛ»"),
+    };
+
+    /// <summary>Страница 5: лента новостей; видны строки, чья минута прошла.</summary>
+    void RenderNews(List<ScreenLine> L)
+    {
+        L.Add(new ScreenLine("БРАУЗЕР · НОВОСТИ · " + dir.Clock.Display, White));
+        L.Add(new ScreenLine("", C));
+
+        int m = dir.Clock.WholeMinutes;
+        var visible = new List<string>();
+        for (int i = 0; i < NewsRows.Length; i++)
+        {
+            if (NewsRows[i].minute <= m)
+                visible.Add(MinText(NewsRows[i].minute) + " · " + NewsRows[i].text);
+        }
+        if (dir.exploded)
+            visible.Add(dir.Clock.Display + " · ВСПЫШКА НАД ДИУ-2. ДЦ-5/7/11 НЕДОСТУПНЫ");
+
+        int maxRows = Mathf.Max(1, s.Rows - 6);
+        int start = Mathf.Max(0, visible.Count - maxRows);
+        for (int i = start; i < visible.Count && i < start + maxRows; i++)
+            L.Add(new ScreenLine(visible[i], C));
+
+        L.Add(new ScreenLine("", C));
+        L.Add(new ScreenLine(dir.exploded ? "лента замерла." : "лента обновляется сама.", Dim));
+        L.Add(new ScreenLine("CTRL+C — к списку страниц", Dim));
+    }
+
+    static string MinText(int minute)
+    {
+        return (minute / 60).ToString("00") + ":" + (minute % 60).ToString("00");
+    }
+
     void RenderNotes(List<ScreenLine> L)
     {
+        if (noteOpen < 0)
         if (noteOpen < 0)
         {
             L.Add(new ScreenLine("ЗАМЕТКИ", White));
@@ -1153,14 +1441,52 @@ public class TerminalApp
 
     void SellSelectedData()
     {
-        if (browserSel < 0 || browserSel >= dir.StolenFiles.Count) return;
-        string name = dir.StolenFiles[browserSel];
+        if (browserSel < 0 || browserSel >= dir.State.filesTaken.Count) return;
+        string name = dir.State.filesTaken[browserSel];
         int price = MarketPrice(name);
         if (!dir.SellStolenFile(name, price)) return;
 
         browserMsg = "ПРОДАНО: " + name + "  +" + price + " кр.";
         browserMsgUntil = Time.time + 3f;
-        browserSel = Mathf.Clamp(browserSel, 0, Mathf.Max(0, dir.StolenFiles.Count - 1));
+        browserSel = Mathf.Clamp(browserSel, 0, Mathf.Max(0, dir.State.filesTaken.Count - 1));
+    }
+
+    /// <summary>Прямая продажа офферу ТЕРРА на странице форума.</summary>
+    void SellTerraSelected()
+    {
+        if (browserSel < 0 || browserSel >= dir.TerraOffers.Count) return;
+        TerraOffer o = dir.TerraOffers[browserSel];
+        if (dir.SellToTerra(o))
+        {
+            browserMsg = "СДЕЛКА ЗАКРЫТА: +" + o.price + " кр.";
+            browserMsgUntil = Time.time + 3f;
+        }
+        else
+        {
+            browserMsg = "ОТКАЗ. СМОТРИ ЛЕНТУ ФОРУМА.";
+            browserMsgUntil = Time.time + 3f;
+        }
+    }
+
+    /// <summary>Список страниц стартового экрана браузера по текущей ночи.</summary>
+    List<int> BrowserPages()
+    {
+        var pages = new List<int> { 1, 2 };
+        if (dir.State.night >= 3 || dir.TerraUnlocked) pages.Add(3);
+        if (dir.State.night >= 3) { pages.Add(4); pages.Add(5); }
+        return pages;
+    }
+
+    static string BrowserPageTitle(int page)
+    {
+        switch (page)
+        {
+            case 1: return "ТЕНЕВОЙ РЫНОК";
+            case 2: return "КАК ЭТО РАБОТАЕТ";
+            case 3: return "ТЕНЕВОЙ ФОРУМ · ТЕРРА";
+            case 4: return "СТАТУС ДЦ";
+            default: return "НОВОСТИ";
+        }
     }
 
     static int MarketPrice(string name)
