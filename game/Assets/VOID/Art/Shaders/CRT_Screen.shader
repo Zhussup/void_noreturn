@@ -7,15 +7,15 @@ Shader "VOID/CRT_Screen"
     Properties
     {
         _MainTex ("Экран (RenderTexture)", 2D) = "black" {}
-        _Brightness ("Яркость", Range(0.5, 3)) = 1.3
-        _Scanlines ("Строки развёртки", Range(0, 1)) = 0.18
-        _ScanlineCount ("Число строк развёртки", Float) = 320
-        _Curvature ("Изгиб кинескопа", Range(0, 0.4)) = 0.06
-        _Glow ("Свечение букв", Range(0, 2)) = 0.7
-        _GlowRadius ("Радиус свечения, тексели", Range(0.5, 8)) = 2.5
+        _Brightness ("Яркость", Range(0.5, 3)) = 1.15
+        _Scanlines ("Строки развёртки", Range(0, 1)) = 0.10
+        _ScanlineCount ("Число строк развёртки", Float) = 240
+        _Curvature ("Изгиб кинескопа", Range(0, 0.4)) = 0.03
+        _Glow ("Свечение букв", Range(0, 2)) = 0.3
+        _GlowRadius ("Радиус свечения, тексели", Range(0.5, 8)) = 1.25
         _Vignette ("Виньетка", Range(0, 1)) = 0.35
         _Flicker ("Мерцание", Range(0, 0.2)) = 0.015
-        _ChromaShift ("Расслоение цветов, тексели", Range(0, 4)) = 0.6
+        _ChromaShift ("Расслоение цветов, тексели (+ _Glitch × 6)", Range(0, 4)) = 0.15
         [Header(Code hooks)]
         _Darken ("Затемнение (тревога)", Range(0, 1)) = 0
         _Glitch ("Глитч (VOID)", Range(0, 1)) = 0
@@ -120,10 +120,11 @@ Shader "VOID/CRT_Screen"
                 float3 col = SampleSplit(uv, shift);
                 col += Bloom(uv) * _Glow;
 
-                // ---- строки развёртки; гаснут, когда мельче пикселя (без муара)
+                // ---- строки развёртки; при периоде < 2.5 px их нет (там муар),
+                // к 4 px — в полную силу. density — строк на пиксель экрана.
                 float s = 0.5 + 0.5 * cos(uv.y * _ScanlineCount * 6.2831853);
-                float density = fwidth(uv.y) * _ScanlineCount;
-                float scanFade = saturate(1.5 - density * 2.0);
+                float density = max(fwidth(uv.y) * _ScanlineCount, 1e-4);
+                float scanFade = saturate((1.0 / density - 2.5) / 1.5);
                 col *= 1.0 - _Scanlines * (1.0 - s) * scanFade;
 
                 // ---- виньетка

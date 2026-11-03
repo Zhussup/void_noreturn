@@ -188,6 +188,10 @@ public class ScreenSurface : MonoBehaviour
             filterMode = FilterMode.Trilinear,
             anisoLevel = 4,
             wrapMode = TextureWrapMode.Clamp,
+            // На рабочей дистанции RT сжимается ~×1.7 (LOD ≈ 0.75), и без сдвига
+            // текст брался в основном из mip 1 — «мыло». −0.7 держит mip 0 на
+            // станции, а на дальних видах мипы всё так же гасят рябь.
+            mipMapBias = -0.7f,
         };
         target.Create();
 
