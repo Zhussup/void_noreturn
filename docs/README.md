@@ -36,6 +36,15 @@
 открывает следующую. Добавлены мышь-обзор, точка прицела и действия с предметами
 (`E`): навёл на телефон — нажал `E`.
 
+**Постэффект CRT** — шейдер `VOID/CRT_Post` на игровой камере (`CrtFilter`,
+вешается из `NightDirector.BuildCrt`), включается **только в момент проверки
+кибербезов** (`TickCyberbez` → `FlashCrt(0.55, 5 с)`): скан-линии, мерцание,
+сдвиг сходимости RGB, прокат развёртки, «пересканирование» полос; последние
+1.5 с плавно гаснет. Вне проверок кадр чистый.
+**Саундтрек** — файл `game/Assets/Resources/Music/night_theme`
+(OGG/WAV/MP3), грузится через `Resources.Load`, зациклен; громкость по ночам
+0.26 / 0.34 / 0.42, на смерти и финалах — тишина (см. [03_assets_checklist.md](03_assets_checklist.md)).
+
 **Комната** — работа друга из ветки `Alauddinpart`: `Assets/VOID/Scenes/Env_Room.unity`,
 префабы `Assets/VOID/Prefabs/PRB_*` и материалы `Assets/VOID/Art/Materials/MAT_*`.
 Скрипт `Assets/Editor/VoidSceneBuilder.cs` открывает `Env_Room`, убирает dev-камеру,

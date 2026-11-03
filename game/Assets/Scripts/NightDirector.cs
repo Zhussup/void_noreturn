@@ -242,6 +242,8 @@ public class NightDirector : MonoBehaviour
         BuildWorldBits();
         BuildInteractionSystem();
         BuildOverlay();
+        BuildMusic();
+        BuildCrt();
 
         ActiveStation = StationTerminal;
         IntroTitle = TitleOf(night);
@@ -790,6 +792,91 @@ public class NightDirector : MonoBehaviour
         ringSource.spatialBlend = 0.35f;
     }
 
+    // ------------------------------------------------------------ саундтрек
+
+    AudioSource musicSource;
+
+    /// <summary>
+    /// Зацикленный саундтрек смены. Трек кладётся в Assets/Resources/Music/
+    /// с именем night_theme (.ogg/.wav/.mp3) — Unity не видит файлы вне Assets,
+    /// поэтому ресурс, а не корень проекта. Чем ближе день расплаты, тем громче.
+    /// </summary>
+    void BuildMusic()
+    {
+        var go = new GameObject("NightMusic");
+        musicSource = go.AddComponent<AudioSource>();
+        musicSource.loop = true;
+        musicSource.playOnAwake = false;
+        musicSource.spatialBlend = 0f; // стерео «в голове», без позиционирования
+
+        AudioClip clip = Resources.Load<AudioClip>("Music/night_theme");
+        if (clip == null)
+        {
+            Debug.LogWarning("[VNR] Саундтрек не найден: положи файл в Assets/Resources/Music/night_theme.ogg");
+            return;
+        }
+        musicSource.clip = clip;
+        musicSource.priority = 128;
+        musicSource.volume = State.night >= 3 ? 0.42f : State.night == 2 ? 0.34f : 0.26f;
+        musicSource.Play();
+    }
+
+    /// <summary>На смерти и финалах музыка уходит — остаётся тишина.</summary>
+    void StopMusic()
+    {
+        if (musicSource != null) musicSource.Stop();
+    }
+
+    // ------------------------------------------------------------ CRT-постэффект
+
+    CrtFilter crt;
+    float crtUntil; // до какого времени кибербезы «пересканируют» кадр
+    float crtPeak;
+
+    /// <summary>Вешает CRT-постэффект (VOID/CRT_Post) на игровую камеру.</summary>
+    void BuildCrt()
+    {
+        Camera cam = Camera.main;
+        if (cam == null && Player != null) cam = Player.cameraTransform.GetComponent<Camera>();
+        if (cam == null) return;
+
+        Shader sh = Shader.Find("VOID/CRT_Post");
+        if (sh == null)
+        {
+            Debug.LogWarning("[VNR] Шейдер CRT_Post не найден (Assets/VOID/Art/Shaders/CRT_Post.shader).");
+            return;
+        }
+        crt = cam.gameObject.AddComponent<CrtFilter>();
+        crt.CrtMat = new Material(sh);
+        Debug.Log("[VNR] CRT-постэффект на камере " + cam.name);
+    }
+
+    /// <summary>Всплеск CRT: кибербезы проверяют — кадр «пересканируется» и так же быстро гаснет.</summary>
+    void FlashCrt(float peak, float seconds)
+    {
+        if (crt == null) return;
+        crtPeak = peak;
+        crtUntil = Time.time + seconds;
+    }
+
+    void TickCrt()
+    {
+        if (crt == null) return;
+        if (!Running)
+        {
+            crt.intensity = 0f; // смерть, титры, эпилог, отчёт — чистый кадр
+            return;
+        }
+        float left = crtUntil - Time.time;
+        if (left <= 0f)
+        {
+            crt.intensity = 0f;
+            return;
+        }
+        // пик держится почти весь всплеск, последние 1.5 с плавно гаснут
+        crt.intensity = crtPeak * Mathf.Clamp01(left / 1.5f);
+    }
+
     void BuildWallClock()
     {
         // Часы друга — аналоговые: циферблат статичный, стрелки крутим кодом
@@ -1036,6 +1123,7 @@ public class NightDirector : MonoBehaviour
         if (cyberCd <= 0f)
         {
             cyberCd = 280f;
+            FlashCrt(0.55f, 5f); // кибербезы в кадре: CRT-всплеск на несколько секунд
 
             // Застукали за скачиванием — ловят сразу.
             if (terminal != null && terminal.Downloading)
@@ -1087,6 +1175,8 @@ public class NightDirector : MonoBehaviour
         VignetteAlpha = Mathf.Clamp01((State.anxiety - 25f) / 75f) * 0.85f;
         TypoChance = 0.010f + 0.015f * Mathf.Max(0, State.insomnia - 1)
                    + 0.00012f * State.anxiety;
+
+        TickCrt();
 
         if (Time.time > flashUntil) FlashAlpha = 0f;
         if (Time.time > subtitleUntil) Subtitle = null;
@@ -1668,6 +1758,7 @@ public class NightDirector : MonoBehaviour
     void EnterCredits()
     {
         if (modal == ModalKind.Credits) return;
+        StopMusic();
         if (ringSource != null) ringSource.Stop();
         phone = PhoneState.Idle;
         modal = ModalKind.Credits;
@@ -1681,6 +1772,7 @@ public class NightDirector : MonoBehaviour
     void StartEpilogue()
     {
         if (modal == ModalKind.Epilogue) return;
+        StopMusic();
         if (ringSource != null) ringSource.Stop();
         phone = PhoneState.Idle;
         modal = ModalKind.Epilogue;
@@ -1700,6 +1792,7 @@ public class NightDirector : MonoBehaviour
     {
         if (modal == ModalKind.Death || exploded) return; // после взрыва смерти нет
         retryNight = State.night;
+        StopMusic();
         if (ringSource != null) ringSource.Stop();
         phone = PhoneState.Idle;
         modal = ModalKind.Death;
@@ -1719,6 +1812,7 @@ public class NightDirector : MonoBehaviour
     {
         if (modal == ModalKind.Death) return;
         retryNight = State.night;
+        StopMusic();
         if (ringSource != null) ringSource.Stop();
         phone = PhoneState.Idle;
         modal = ModalKind.Death;
@@ -1740,6 +1834,7 @@ public class NightDirector : MonoBehaviour
     {
         if (modal == ModalKind.Death || modal == ModalKind.End) return;
         retryNight = State.night;
+        StopMusic();
         if (ringSource != null) ringSource.Stop();
         phone = PhoneState.Idle;
         modal = ModalKind.Death;
