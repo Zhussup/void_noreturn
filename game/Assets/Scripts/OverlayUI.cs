@@ -174,6 +174,10 @@ public class OverlayUI : MonoBehaviour
             DrawEnd(w, h);
         else if (dir.Modal == ModalKind.Settings)
             DrawSettings(w, h);
+        else if (dir.Modal == ModalKind.Credits)
+            DrawCredits(w, h);
+        else if (dir.Modal == ModalKind.Epilogue)
+            DrawEpilogue(w, h);
 
         float s = dir.UiScale;
 
@@ -302,7 +306,7 @@ public class OverlayUI : MonoBehaviour
         {
             GUI.color = new Color(1f, 1f, 1f, Mathf.Clamp01(dir.IntroAlpha));
             GUI.Label(new Rect(0f, h * 0.38f, w, h * 0.12f), "VOID: NO RETURN", title);
-            GUI.Label(new Rect(0f, h * 0.52f, w, h * 0.06f), "НОЧЬ 1 · «СМЕНА»", center);
+            GUI.Label(new Rect(0f, h * 0.52f, w, h * 0.06f), dir.IntroTitle, center);
             GUI.color = Color.white;
         }
     }
@@ -516,6 +520,56 @@ public class OverlayUI : MonoBehaviour
     void DrawBand(Rect r, float alpha)
     {
         DrawSolid(r, new Color(0f, 0f, 0f, alpha));
+    }
+
+    /// <summary>Happy end: чёрный экран, титры едут снизу вверх сами.</summary>
+    void DrawCredits(float w, float h)
+    {
+        DrawSolid(new Rect(0f, 0f, w, h), Color.black);
+
+        var style = new GUIStyle(endStyle);
+        style.alignment = TextAnchor.MiddleCenter;
+        float lineH = style.fontSize * 1.45f;
+        if (lineH <= 0f) return;
+
+        // Скорость — одна строка в секунду; потом титры просто стоят на месте.
+        float t = Time.time - dir.CreditsStart;
+        float bottom = h * 0.92f;
+        float travel = Mathf.Min(t * lineH,
+            Mathf.Max(0f, bottom - h * 0.15f +
+                          (dir.CreditsLines.Length - 1) * lineH));
+
+        for (int i = 0; i < dir.CreditsLines.Length; i++)
+        {
+            float y = bottom - travel + i * lineH;
+            if (y < -lineH || y > h) continue;
+            GUI.Label(new Rect(0f, y, w, lineH), dir.CreditsLines[i], style);
+        }
+    }
+
+    /// <summary>Bad end: чёрный экран, строки появляются по одной (~1.9 с на строку).</summary>
+    void DrawEpilogue(float w, float h)
+    {
+        DrawSolid(new Rect(0f, 0f, w, h), Color.black);
+
+        float t = Time.time - dir.CreditsStart;
+        int shown = Mathf.Clamp(Mathf.FloorToInt(t / 1.9f) + 1, 0, dir.EpilogueLines.Length);
+
+        var body = new GUIStyle(endStyle);
+        body.wordWrap = true;
+
+        for (int i = 0; i < shown; i++)
+        {
+            float a = Mathf.Clamp01((t - (i * 1.9f)) / 0.55f);
+            var line = new GUIStyle(body);
+            line.normal.textColor = new Color(body.normal.textColor.r,
+                body.normal.textColor.g, body.normal.textColor.b, a);
+            GUI.Label(new Rect(w * 0.10f, h * 0.22f + i * body.fontSize * 2.1f,
+                               w * 0.80f, h * 0.05f), dir.EpilogueLines[i], line);
+        }
+
+        GUI.Label(new Rect(0f, h - h * 0.06f, w, h * 0.045f),
+                  "R — переиграть ночь 3   ·   E — с самого начала", hintStyle);
     }
 
     void DrawSolid(Rect r, Color c)

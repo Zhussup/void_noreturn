@@ -1,16 +1,18 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Сквозное состояние игры. Переживает ночь и (в будущем) сохраняется между сменами.
-/// Поля намеренно простые — сериализуются JsonUtility без адаптеров.
+/// Сквозное состояние игры. Карьерные поля переживают ночь; ночные сбрасываются
+/// в ResetForNight. Поля намеренно простые — сериализуются JsonUtility без адаптеров.
+/// Сборка = три ночи с финалом (ночи 4–5 из PDF в игру не идут).
 /// </summary>
 [Serializable]
 public class GameState
 {
     [Header("Ночь")]
-    public int night = 1;          // 1..5
-    public bool isVoid;            // играем за VOID (ночи 4–5)
+    public int night = 1;          // 1..3
+    public bool isVoid;            // зарезервировано под режим VOID (ночи 4–5 вырезаны)
 
     [Header("Состояние Брика")]
     public int insomnia = 1;       // 1..5 — с каждой ночью опечаток больше
@@ -37,10 +39,17 @@ public class GameState
     [Header("Теневой рынок")]
     public int credits;            // выручка за проданные данные
 
+    [Header("ТЕРРА · покупатели")]
+    public List<string> filesTaken = new List<string>(); // скачанные целевые файлы
+    public List<string> filesSold = new List<string>();  // проданные файлы (любой канал)
+    public int terraTrust;         // доверие покупателей ТЕРРА, 0..100
+    public int deals;              // закрытые сделки напрямую через ТЕРРА
+    public bool missionReady;      // дедлайн ТЕРРА пройден (контроль 06:00 ночи 3)
+
     public void ResetForNight(int index)
     {
-        night = Mathf.Clamp(index, 1, 5);
-        isVoid = night >= 4;
+        night = Mathf.Clamp(index, 1, 3);
+        isVoid = false; // ночи 4–5 вырезаны; поле оставлено под возможный режим VOID
         insomnia = Mathf.Clamp(night, 1, 5);
         anxiety = 12f;
         if (pills < 2) pills = 2;
@@ -50,6 +59,7 @@ public class GameState
         suspicion = 0;
         dirtyLogs = false;
         tasksDone = 0;
+        missionReady = false;
         if (codes == null || codes.Length != 3) codes = new bool[3];
         if (records == null || records.Length != 4) records = new bool[4];
         if (trust == null || trust.Length != 3) trust = new int[] { 50, 50, 50 };
