@@ -872,6 +872,7 @@ public class NightDirector : MonoBehaviour
         if (dictaphoneObj != null) dictaphoneHome = dictaphoneObj.transform.localPosition;
 
         BindPhoneInteractable();
+        BindDeskInteractables();
         BuildPhoneAudio();
         BuildWallClock();
 
@@ -896,6 +897,54 @@ public class NightDirector : MonoBehaviour
         phoneInteractable.available = false;
         phoneInteractable.maxDistance = 2.6f;
         phoneInteractable.Activated += OnPhoneAction;
+    }
+
+    Interactable pillInteractable, dictInteractable;
+
+    /// <summary>
+    /// Мелочи на рабочем столе тоже отзываются на E: блистер и диктофон.
+    /// Дублирует клавиши 1/2 на столе — HUD и хинт объясняют оба пути.
+    /// </summary>
+    void BindDeskInteractables()
+    {
+        if (pillsObj != null)
+        {
+            pillInteractable = pillsObj.GetComponent<Interactable>();
+            if (pillInteractable == null) pillInteractable = pillsObj.AddComponent<Interactable>();
+            pillInteractable.label = "1 (или E) — таблетка";
+            pillInteractable.available = false;
+            pillInteractable.maxDistance = 2.2f;
+            pillInteractable.Activated += TakePill;
+        }
+        if (dictaphoneObj != null)
+        {
+            dictInteractable = dictaphoneObj.GetComponent<Interactable>();
+            if (dictInteractable == null) dictInteractable = dictaphoneObj.AddComponent<Interactable>();
+            dictInteractable.label = "2 (или E) — диктофон";
+            dictInteractable.available = false;
+            dictInteractable.maxDistance = 2.2f;
+            dictInteractable.Activated += PlayDictaphone;
+        }
+    }
+
+    /// <summary>Блистер/диктофон E-действия: только за столом живой смены.</summary>
+    void UpdateDeskInteractables()
+    {
+        bool atDesk = Running && ActiveStation == StationDesk && modal == ModalKind.None;
+        bool pillAvailable = atDesk && State.pills > 0;
+
+        if (pillInteractable != null)
+        {
+            pillInteractable.available = pillAvailable;
+            pillInteractable.label = pillAvailable ? "1 (или E) — таблетка" : "Блистер пуст";
+        }
+        if (dictInteractable != null)
+        {
+            dictInteractable.available = atDesk && recordingAvailable;
+            dictInteractable.label = recordingAvailable && !State.records[recordOfNight]
+                ? "2 (или E) — диктофон · новая запись"
+                : "2 (или E) — диктофон";
+        }
     }
 
     void BuildInteractionSystem()
@@ -1166,6 +1215,7 @@ public class NightDirector : MonoBehaviour
         // должна попасть в строку ввода, а не поднять трубку
         TickPhone();
         UpdatePhoneInteractable();
+        UpdateDeskInteractables();
         if (interaction != null) interaction.Tick();
 
         if (Running && modal == ModalKind.None)

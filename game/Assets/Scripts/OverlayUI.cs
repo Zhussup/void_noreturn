@@ -15,7 +15,7 @@ public class OverlayUI : MonoBehaviour
 
     GUIStyle center, title, endStyle, callName, callLine, callInput, hintStyle, subtitleStyle;
     GUIStyle interactionLabel, inputPreview, settingsTitle, settingsOption, settingsValue;
-    GUIStyle hudText, hudWarn, hudBad;
+    GUIStyle hudText, hudWarn, hudBad, hudName, hudVal, hudWarnVal, hudBadVal;
     float styledScale = -1f;
     float styledTypeInScale = -1f;
     int styledHeight = -1;
@@ -88,8 +88,10 @@ public class OverlayUI : MonoBehaviour
         callInput.normal.textColor = Color.white;
 
         hintStyle = new GUIStyle(center);
-        hintStyle.fontSize = Mathf.RoundToInt(Screen.height * 0.017f * s);
-        hintStyle.normal.textColor = new Color(0.62f, 0.66f, 0.63f, 0.85f);
+        // Хинты обязаны читаться на любом размере вью: минимум 15px и
+        // заметно светлее фона, плюс тёмная полоса-подложка при отрисовке.
+        hintStyle.fontSize = Mathf.Max(15, Mathf.RoundToInt(Screen.height * 0.021f * s));
+        hintStyle.normal.textColor = new Color(0.78f, 0.83f, 0.80f, 0.95f);
 
         subtitleStyle = new GUIStyle(center);
         subtitleStyle.fontSize = Mathf.RoundToInt(Screen.height * 0.022f * s);
@@ -130,6 +132,20 @@ public class OverlayUI : MonoBehaviour
 
         hudBad = new GUIStyle(hudText);
         hudBad.normal.textColor = new Color(1f, 0.36f, 0.36f, 0.95f);
+
+        // Левые колонки — тусклые названия показателей, правые — значения.
+        hudName = new GUIStyle(hudText);
+        hudName.normal.textColor = new Color(0.50f, 0.55f, 0.52f, 0.85f);
+
+        hudVal = new GUIStyle(hudName);
+        hudVal.alignment = TextAnchor.MiddleRight;
+        hudVal.normal.textColor = new Color(0.90f, 0.95f, 0.92f, 0.95f);
+
+        hudWarnVal = new GUIStyle(hudVal);
+        hudWarnVal.normal.textColor = new Color(1f, 0.76f, 0.29f, 0.95f);
+
+        hudBadVal = new GUIStyle(hudVal);
+        hudBadVal.normal.textColor = new Color(1f, 0.36f, 0.36f, 0.95f);
     }
 
     void OnGUI()
@@ -197,18 +213,22 @@ public class OverlayUI : MonoBehaviour
         if (dir.Modal == ModalKind.None && dir.Running &&
             !string.IsNullOrEmpty(dir.Hint))
         {
-            var r = new Rect(0f, h - h * 0.035f * s, w, h * 0.03f * s);
+            var r = new Rect(0f, h - h * 0.045f * s, w, h * 0.04f * s);
+            DrawBand(r, 0.60f);
             GUI.Label(r, dir.Hint, hintStyle);
         }
     }
 
-    /// <summary>Минимальный HUD состояния: ночь, тревога, сонливость, след/логи, таблетки, кибербезы.</summary>
+    /// <summary>
+    /// HUD состояния: таблица «название слева — значение справа».
+    /// Тревога и след показываются с полосой — видно, где граница.
+    /// </summary>
     void DrawStatusHud(float w, float h)
     {
         float s = dir.UiScale;
         float lineH = hudText.lineHeight + 3f * s;
         float pad = 10f * s;
-        float panelW = Mathf.Min(260f * s, w * 0.42f);
+        float panelW = Mathf.Min(320f * s, w * 0.46f);
         bool downloading = dir.TerminalDownloading;
         float panelH = pad * 2f + lineH * (downloading ? 7f : 6f) + 18f * s;
 
@@ -219,42 +239,60 @@ public class OverlayUI : MonoBehaviour
         float x = panel.x + pad;
         float y = panel.y + pad;
         float textW = panel.width - pad * 2f;
+        float nameW = textW * 0.46f;
+        float valX = x + nameW;
+        float valW = textW - nameW;
 
+        // часы — на всю ширину, крупнее прочих строк
         GUI.Label(new Rect(x, y, textW, lineH),
                   "НОЧЬ " + dir.State.night + " · " + dir.Clock.Display, hudText);
-        y += lineH;
+        y += lineH + 4f * s;
 
+        // Тревога: ползёт к 100 — сердце Брика не выдержит.
         float anxiety = Mathf.Clamp(dir.State.anxiety, 0f, 100f);
-        GUIStyle anxietyStyle = anxiety >= 75f ? hudBad : anxiety >= 55f ? hudWarn : hudText;
-        GUI.Label(new Rect(x, y, textW, lineH),
-                  "ТРЕВОГА  " + Mathf.RoundToInt(anxiety) + "%", anxietyStyle);
+        GUI.Label(new Rect(x, y, nameW, lineH), "ТРЕВОГА", hudName);
+        GUI.Label(new Rect(valX, y, valW, lineH),
+                  Mathf.RoundToInt(anxiety) + "%" + (anxiety >= 75f ? "  100 — КОНЕЦ" : ""),
+                  anxiety >= 75f ? hudBadVal : anxiety >= 55f ? hudWarnVal : hudVal);
         y += lineH;
         DrawBar(new Rect(x, y - 2f * s, textW, 3f * s), anxiety / 100f,
                 anxiety >= 75f ? new Color(1f, 0.36f, 0.36f, 0.90f)
                 : anxiety >= 55f ? new Color(1f, 0.76f, 0.29f, 0.90f)
                 : new Color(0.55f, 0.85f, 0.65f, 0.75f));
-        y += 6f * s;
+        y += 8f * s;
 
-        GUI.Label(new Rect(x, y, textW, lineH),
-                  "СОНЛИВОСТЬ  " + dir.State.insomnia + "/5", hudText);
+        // Бессонница: чем выше — тем чаще опечатки в командах.
+        GUI.Label(new Rect(x, y, nameW, lineH), "БЕССОННИЦА", hudName);
+        GUI.Label(new Rect(valX, y, valW, lineH),
+                  dir.State.insomnia + "/5",
+                  dir.State.insomnia >= 4 ? hudWarnVal : hudVal);
         y += lineH;
 
+        // След: кибербезы следят за логами; 100% — ордер.
         bool dirty = dir.State.dirtyLogs;
-        GUI.Label(new Rect(x, y, textW, lineH),
-                  "СЛЕД  " + dir.State.suspicion + "%   ЛОГИ: " + (dirty ? "ГРЯЗНЫЕ" : "ЧИСТО"),
-                  dirty ? hudWarn : hudText);
+        GUI.Label(new Rect(x, y, nameW, lineH), "СЛЕД В ЛОГАХ", hudName);
+        GUI.Label(new Rect(valX, y, valW, lineH),
+                  dir.State.suspicion + "%" + (dirty ? "   ГРЯЗНО" : ""),
+                  dirty ? hudWarnVal : hudVal);
         y += lineH;
         DrawBar(new Rect(x, y - 2f * s, textW, 3f * s), dir.State.suspicion / 100f,
                 dirty ? new Color(1f, 0.76f, 0.29f, 0.90f)
                       : new Color(0.55f, 0.85f, 0.65f, 0.55f));
-        y += 6f * s;
+        y += 8f * s;
 
-        GUI.Label(new Rect(x, y, textW, lineH),
-                  "ТАБЛЕТКИ  " + dir.State.pills, hudText);
+        // Таблетки: гасят тревогу (клавиша 1 за столом или E на блистере).
+        GUI.Label(new Rect(x, y, nameW, lineH), "ТАБЛЕТКИ", hudName);
+        GUI.Label(new Rect(valX, y, valW, lineH),
+                  dir.State.pills + (dir.State.anxiety >= 55f && dir.State.pills > 0
+                      ? "  ·  1 — принять" : ""),
+                  dir.State.anxiety >= 55f && dir.State.pills > 0 ? hudWarnVal : hudVal);
         y += lineH;
-        GUI.Label(new Rect(x, y, textW, lineH),
-                  "КИБЕРБЕЗЫ  " + dir.CyberCdText,
-                  dir.CyberDanger ? hudBad : hudText);
+
+        // Кибербезы: время до плановой проверки логов.
+        GUI.Label(new Rect(x, y, nameW, lineH), "КИБЕРБЕЗЫ", hudName);
+        GUI.Label(new Rect(valX, y, valW, lineH),
+                  dir.CyberCdText + (dir.CyberDanger ? "  СЕЙЧАС" : ""),
+                  dir.CyberDanger ? hudBadVal : hudVal);
 
         if (downloading)
         {
