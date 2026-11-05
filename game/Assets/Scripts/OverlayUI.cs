@@ -122,7 +122,7 @@ public class OverlayUI : MonoBehaviour
         settingsValue.normal.textColor = new Color(1f, 0.76f, 0.29f);
 
         hudText = new GUIStyle(center);
-        hudText.fontSize = Mathf.RoundToInt(Screen.height * 0.017f * s);
+        hudText.fontSize = Mathf.Max(14, Mathf.RoundToInt(Screen.height * 0.019f * s));
         hudText.alignment = TextAnchor.MiddleLeft;
         hudText.wordWrap = false;
         hudText.normal.textColor = new Color(0.72f, 0.79f, 0.75f, 0.90f);
