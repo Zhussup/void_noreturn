@@ -237,7 +237,7 @@ public class TerminalApp
     public void Tick()
     {
         if (!dir.Running || dir.ModalActive) return;
-        if (dir.ActiveStation != StationIndex) return;
+        if (dir.TypingStation != StationIndex) return;
 
         bool enter = Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter);
         // Esc занят глобальными настройками (NightDirector), поэтому «назад» —

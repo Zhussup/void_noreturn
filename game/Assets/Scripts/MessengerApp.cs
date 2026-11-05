@@ -41,7 +41,7 @@ public class MessengerApp
     public void Tick()
     {
         if (!dir.Running || dir.ModalActive) return;
-        if (dir.ActiveStation != StationIndex) return;
+        if (dir.TypingStation != StationIndex) return;
 
         bool typing = dir.MoodPending && channel == (int)ChatChannel.Harmony;
 
@@ -164,7 +164,7 @@ public class MessengerApp
             L.Add(new ScreenLine("", C));
         }
 
-        L.Add(new ScreenLine("←→ каналы  ↑↓ прокрутка  TAB экран", Dim));
+        L.Add(new ScreenLine("←→ каналы  ↑↓ прокрутка  B кровать", Dim));
         s.Set(L);
     }
 

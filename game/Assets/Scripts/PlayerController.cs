@@ -12,7 +12,7 @@ using UnityEngine;
 /// Мышь — свободный обзор вокруг станции (в пределах ±82° по горизонтали
 /// и ±50° по вертикали), чтобы наводить прицел на предметы. Кликов нет.
 /// Повторное нажатие F1–F4 на текущей станции возвращает взгляд в центр.
-/// Клавиши: TAB / Shift+TAB — соседняя станция, F1–F4 — прямой выбор,
+/// Клавиши: F1–F4 — прямой выбор станции, B — кровать,
 /// левый Alt (удерживать) — плавный зум камеры.
 /// Буквы и цифры не заняты переключением: на экранах игрок печатает команды.
 /// Alt символов не печатает, поэтому зум работает и во время ввода текста.
@@ -34,11 +34,17 @@ public class PlayerController : MonoBehaviour
     public int startStation = 1;
 
     [Header("Клавиши станций")]
-    public KeyCode cycleKey = KeyCode.Tab;                 // Shift+Tab — назад
     public KeyCode[] directKeys =
     {
         KeyCode.F1, KeyCode.F2, KeyCode.F3, KeyCode.F4,
     };
+    // Кровать — отдельная клавиша: Tab убрали, случайные перескоки ломали набор
+    // текста. Во время набора B — буква, а не телепорт.
+    public KeyCode bedKey = KeyCode.B;
+
+    [Header("Рамка выбора экрана для ввода")]
+    [Tooltip("Если прицел ближе к монитору чата, чем к терминалу, и в пределах этого угла — печать уходит в чат")]
+    public float chatAimWindowDeg = 55f;
 
     [Header("Мышь — обзор вокруг станции")]
     public float mouseSensitivity = 2.0f;
@@ -84,6 +90,29 @@ public class PlayerController : MonoBehaviour
     public bool TextInputActive { get; set; }
 
     public bool MonitorFocused => focusScreen != null;
+
+    /// <summary>
+    /// Куда смотрит «печать»: истина — чат-монитор. Оба экрана за одним столом,
+    /// поэтому прицел решает: угол до экрана чата меньше угла до терминала
+    /// и внутри рамки chatAimWindowDeg. В приближении — по самому экрану.
+    /// Ссылки на цели — те же, что у станций F1 (терминал) / F2 (чат).
+    /// </summary>
+    public bool AimChat
+    {
+        get
+        {
+            if (MonitorFocused)
+                return focusScreen == FocusOf(1);
+
+            Transform terminalT = FocusOf(0), chatT = FocusOf(1);
+            if (cameraTransform == null || terminalT == null || chatT == null) return false;
+
+            Vector3 fwd = cameraTransform.forward;
+            float at = Vector3.Angle(fwd, terminalT.position - cameraTransform.position);
+            float ac = Vector3.Angle(fwd, chatT.position - cameraTransform.position);
+            return ac < at && ac <= chatAimWindowDeg;
+        }
+    }
     public bool CanFocusMonitor => focusScreen == null && aimMonitor != null && !TextInputActive;
 
     /// <summary>Esc в этом кадре уже закрыла приближение монитора.</summary>
@@ -195,25 +224,22 @@ public class PlayerController : MonoBehaviour
         int next = current;
         bool direct = false;
 
-        if (Input.GetKeyDown(cycleKey))
+        // F1–F4 — напрямую на станцию (цифры заняты вводом)
+        for (int i = 0; i < stations.Length && i < directKeys.Length; i++)
         {
-            bool back = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-            next = back
-                ? (current - 1 + stations.Length) % stations.Length
-                : (current + 1) % stations.Length;
-        }
-        else
-        {
-            // F1–F4 — напрямую на станцию (цифры заняты вводом)
-            for (int i = 0; i < stations.Length && i < directKeys.Length; i++)
+            if (Input.GetKeyDown(directKeys[i]))
             {
-                if (Input.GetKeyDown(directKeys[i]))
-                {
-                    next = i;
-                    direct = true;
-                    break;
-                }
+                next = i;
+                direct = true;
+                break;
             }
+        }
+
+        if (!direct && !TextInputActive && Input.GetKeyDown(bedKey))
+        {
+            // Toggle: не сидим на кровати — идём на неё, сидим — назад на терминал.
+            next = current == stations.Length - 1 ? 0 : stations.Length - 1;
+            direct = true;
         }
 
         if (direct && next == current)

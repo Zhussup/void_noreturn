@@ -12,6 +12,15 @@ public static class Campaign
     public static int CurrentNight = 1;
     static GameState snapshot; // конец последней закрытой ночи
 
+    /// <summary>
+    /// true — смена начнётся сразу (переходы внутри сессии), false — сначала
+    /// главное меню. НочьDirector.Start потребляет и поднимает этот флаг;
+    /// снимок в Reset снова его опускает, поэтому «с самого начала» показывает меню.
+    /// </summary>
+    public static bool SkipMenu;
+
+    public static bool HasSnapshot => snapshot != null;
+
     static GameState Clone(GameState s) =>
         JsonUtility.FromJson<GameState>(JsonUtility.ToJson(s));
 
@@ -35,5 +44,6 @@ public static class Campaign
     {
         snapshot = null;
         CurrentNight = 1;
+        SkipMenu = false; // новая игра начинается с главного меню
     }
 }

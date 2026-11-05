@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-public enum ModalKind { None, Intro, Call, Dictaphone, Rest, Death, End, Settings, Credits, Epilogue }
+public enum ModalKind { None, Intro, MainMenu, Call, Dictaphone, Rest, Death, End, Settings, Credits, Epilogue }
 
 /// <summary>
 /// Ночь 1 «Смена»: часы, события, звонок шефа, тревога, бессонница,
@@ -54,11 +54,141 @@ public class NightDirector : MonoBehaviour
     /// <summary>Выбранная строка настроек: 0 — интерфейс, 1 — текст ввода.</summary>
     public int SettingsRow { get; private set; }
 
+    // ------------------------------------------------------------ дев-читы (F9)
+
+    /// <summary>Открытая дев-панель (F9): быстрый проход контента. В релизе выключается.</summary>
+    public bool CheatsOpen;
+
+    /// <summary>Строки дев-панели для OverlayUI.</summary>
+    public readonly string[] CheatLines =
+    {
+        "1 — ЗАДАЧИ: закрыть все",
+        "2 — ФАЙЛЫ: украсть все три (dc7_route/backup/final)",
+        "3 — ТЕРРА: продать всё (сделка + missionReady)",
+        "4 — ТЕРРА: открыть форум",
+        "5 — ЛОГИ: почистить, СЛЕД 0, снять расследование",
+        "6 — ТАБЛЕТКИ +3, ТРЕВОГА 0",
+        "7 — ВРЕМЯ: +30 игровых минут",
+        "8 — ВРЕМЯ: прыгнуть на 06:59 (тест финала)",
+        "9 — СМЕНА: закрыть отчётом (ночь 1–2)",
+        "0 — закрыть",
+    };
+
+    /// <summary>
+    /// Кому идёт печать. Оба экрана стоят за одним столом, поэтому выбор —
+    /// по прицелу: смотрите на чат-монитор (в пределах рамки) — чат,
+    /// иначе — терминал. На столе и кровати набор не идёт вовсе.
+    /// </summary>
+    public int TypingStation
+    {
+        get
+        {
+            bool atDesk =
+                ActiveStation == StationTerminal || ActiveStation == StationMessenger;
+            if (!atDesk) return ActiveStation;
+            return Player != null && Player.AimChat ? StationMessenger : StationTerminal;
+        }
+    }
+
     /// <summary>Приложение принимает текст: E отдаётся ему, а не приближению монитора.</summary>
     public bool TextInputActive =>
+        CheatsOpen ||
         ModalActive ||
-        (ActiveStation == StationTerminal && terminal != null && terminal.CapturingInput) ||
-        (ActiveStation == StationMessenger && messenger != null && messenger.CapturingInput);
+        (TypingStation == StationTerminal && terminal != null && terminal.CapturingInput) ||
+        (TypingStation == StationMessenger && messenger != null && messenger.CapturingInput);
+
+    /// <summary>Обработка клавиш дев-панели: цифры 1..9 — чит, 0/F9/ESC — закрыть.</summary>
+    void HandleCheatInput()
+    {
+        for (int i = 1; i <= 9; i++)
+            if (Input.GetKeyDown((KeyCode)((int)KeyCode.Alpha0 + i)))
+                RunCheat(i);
+
+        if (Input.GetKeyDown(KeyCode.Alpha0) || Input.GetKeyDown(KeyCode.Escape) ||
+            Input.GetKeyDown(KeyCode.F9))
+        {
+            CheatsOpen = false;
+            ShowSubtitle("Дев-меню закрыто.", 1.5f);
+        }
+    }
+
+    /// <summary>Читы дев-панели. Идея — быстрый проход: задачи → файлы → продажа → финал.</summary>
+    void RunCheat(int n)
+    {
+        switch (n)
+        {
+            case 1: // все задачи
+                for (int i = 0; i < Tasks.Count; i++) Tasks[i].done = true;
+                ShowSubtitle("ЧИТ: все задачи закрыты.", 2.5f);
+                break;
+
+            case 2: // украсть все целевые файлы
+                RegisterStolenFile("dc7_route.log");
+                RegisterStolenFile("dc7_backup.key");
+                RegisterStolenFile("dc7_final.key");
+                ShowSubtitle("ЧИТ: все три файла в рюкзаке.", 2.5f);
+                break;
+
+            case 3: // продать всё ТЕРРА: файлы, сделка, missionReady
+            {
+                if (!State.filesSold.Contains("dc7_route.log")) SellStolenFile("dc7_route.log", 155);
+                if (!State.filesSold.Contains("dc7_backup.key")) SellStolenFile("dc7_backup.key", 260);
+                if (!State.filesSold.Contains("dc7_final.key")) SellStolenFile("dc7_final.key", 470);
+                State.deals += 1; // прямая сделка ТЕРРА засчитана
+                State.terraTrust = Mathf.Min(100, State.terraTrust + 20);
+                AddTerra("ТЕРРА", "дев-чит: файлы засчитаны как проданные.");
+                CheckMission();
+                ShowSubtitle("ЧИТ: продано " + SoldTargets() + "/3, миссия готова.", 3f);
+                break;
+            }
+
+            case 4:
+                UnlockTerra();
+                ShowSubtitle("ЧИТ: форум ТЕРРА открыт.", 2.5f);
+                break;
+
+            case 5: // чисто всё: логи, след, расследование, ордер
+                State.dirtyLogs = false;
+                State.suspicion = 0;
+                State.cyberStrikes = 0;
+                investigating = false;
+                warrantMinute = -1;
+                warrantRealAt = -1f;
+                ShowSubtitle("ЧИТ: логи чисты, след 0.", 2.5f);
+                break;
+
+            case 6:
+                State.pills += 3;
+                State.anxiety = 0f;
+                ShowSubtitle("ЧИТ: таблетки +3, тревога 0.", 2.5f);
+                break;
+
+            case 7: // +30 игровых минут (1 игровая минута = 1.5 реальной секунды)
+                Clock.Advance(45f);
+                TickEvents();
+                ShowSubtitle("ЧИТ: +30 игровых минут.", 2.5f);
+                break;
+
+            case 8: // прыжок на 06:59 — следующая минута решает финал
+            {
+                float left = (419 - Clock.WholeMinutes) * 1.5f;
+                if (left > 0f) Clock.Advance(left);
+                TickEvents();
+                break;
+            }
+
+            case 9: // закрыть смену отчётом и открыть следующую ночь
+                if (State.night < 3)
+                {
+                    State.tasksDone = TasksDone;
+                    retryNight = State.night + 1;
+                    Campaign.CommitNight(State, retryNight);
+                    SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+                }
+                else ShowSubtitle("В ночь 3 финал только часом: прыгни на 06:59.", 3f);
+                break;
+        }
+    }
 
     // прицел и взаимодействие
     public bool InteractionVisible => interaction != null && interaction.HasTarget
@@ -216,6 +346,10 @@ public class NightDirector : MonoBehaviour
     {
         int night = Mathf.Clamp(retryNight, 1, 3);
         retryNight = 1;
+        // Главное меню показываем только на холодном старте: любые переходы
+        // внутри сессии (смерть, отчёт, следующая ночь) идут мимо него.
+        bool showMenu = !Campaign.SkipMenu;
+        Campaign.SkipMenu = true;
         State = Campaign.BeginNight(night);
         Clock.Reset();
         recordOfNight = Mathf.Clamp(night - 1, 0, 2); // 1-я, 2-я или 3-я запись
@@ -251,10 +385,20 @@ public class NightDirector : MonoBehaviour
         BuildCrt();
 
         ActiveStation = StationTerminal;
-        IntroTitle = TitleOf(night);
-        introStart = Time.time;
-        IntroAlpha = 1f;
-        Debug.Log("[VNR] Entry point: NightDirector.Start · объект Game · Assets/Scenes/Office.unity · ночь " + night);
+        if (showMenu)
+        {
+            modal = ModalKind.MainMenu;
+            MenuIndex = 0;
+            if (Player != null) Player.SetCursorLocked(false); // в меню нужен курсор
+        }
+        else
+        {
+            IntroTitle = TitleOf(night);
+            introStart = Time.time;
+            IntroAlpha = 1f;
+        }
+        Debug.Log("[VNR] Entry point: NightDirector.Start · объект Game · Assets/Scenes/Office.unity · ночь " + night +
+                  (showMenu ? " · главное меню" : ""));
     }
 
     /// <summary>ENTRY POINT смены: интро закончилось, управление отдано игроку.</summary>
@@ -912,6 +1056,34 @@ public class NightDirector : MonoBehaviour
             if (!Running || ModalActive) Player.ClearFocus();
         }
 
+        // F9 — дев-панель читов (для быстрого прохода контента, в т.ч. чтобы
+        // показать преподавателю). Открывается живой смене и прямо в интро;
+        // пока панель открыта, ввод отдаётся только ей.
+        if (Input.GetKeyDown(KeyCode.F9) && !CheatsOpen && !TextInputActive &&
+            (modal == ModalKind.Intro || (Running && modal == ModalKind.None)))
+        {
+            CheatsOpen = true;
+            ShowSubtitle("Дев-меню открыто.", 1.5f);
+            return;
+        }
+        if (CheatsOpen && (Running || modal == ModalKind.Intro))
+        {
+            HandleCheatInput();
+            if (CheatsOpen) return; // мир живёт, клавиши — только в панель
+        }
+
+        if (modal == ModalKind.MainMenu)
+        {
+            // Главное меню: мир стоит, курсор свободен — мышь тоже работает.
+            if (Player != null)
+            {
+                Player.inputEnabled = false;
+                Player.SetCursorLocked(false);
+            }
+            HandleMainMenuInput();
+            return;
+        }
+
         if (modal == ModalKind.Intro)
         {
             float t = Time.time - introStart;
@@ -938,6 +1110,7 @@ public class NightDirector : MonoBehaviour
                 Input.GetKeyDown(KeyCode.KeypadEnter))
             {
                 Campaign.Reset();
+                Campaign.SkipMenu = false; // «с самого начала» — через главное меню
                 retryNight = 1;
                 SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
                 return;
@@ -1015,6 +1188,81 @@ public class NightDirector : MonoBehaviour
         UpdateVisuals();
     }
 
+    // ------------------------------------------------------------ главное меню
+
+    /// <summary>Выбранный пункт главного меню.</summary>
+    public int MenuIndex { get; private set; }
+
+    /// <summary>Пункт «ПРОДОЛЖИТЬ» появляется только если сессия уже начата.</summary>
+    public bool HasContinue => Campaign.HasSnapshot;
+
+    public string[] MainMenuItems => Campaign.HasSnapshot
+        ? new[]
+        {
+            "НОВАЯ СМЕНА",
+            "ПРОДОЛЖИТЬ · НОЧЬ " + Mathf.Clamp(Campaign.CurrentNight, 1, 3),
+            "НАСТРОЙКИ",
+            "ВЫХОД",
+        }
+        : new[] { "НОВАЯ СМЕНА", "НАСТРОЙКИ", "ВЫХОД" };
+
+    public void MenuMove(int delta)
+    {
+        string[] items = MainMenuItems;
+        MenuIndex = (MenuIndex + delta % items.Length + items.Length) % items.Length;
+    }
+
+    /// <summary>Выбор пункта мышью: подсветка следует за курсором.</summary>
+    public void MenuHover(int item)
+    {
+        MenuIndex = Mathf.Clamp(item, 0, MainMenuItems.Length - 1);
+    }
+
+    /// <summary>Запустить выбранный пункт главного меню.</summary>
+    public void MenuActivate(int item)
+    {
+        int n = MainMenuItems.Length;
+        item = Mathf.Clamp(item, 0, n - 1);
+        if (item == 0)
+        {
+            // Новая смена: Reset опускает SkipMenu (холодный старт видит меню),
+            // но мы уже В меню — поднимаем обратно и сразу уходим в интро ночи 1.
+            Campaign.Reset();
+            Campaign.SkipMenu = true;
+            retryNight = 1;
+            RestartScene();
+        }
+        else if (item == 1 && n == 4)
+        {
+            // Продолжить с последнего закрытого сняка сессии.
+            retryNight = Mathf.Clamp(Campaign.CurrentNight, 1, 3);
+            RestartScene();
+        }
+        else if (item == (n == 4 ? 2 : 1))
+        {
+            OpenSettings(fromMenu: true);
+        }
+        else
+        {
+            Debug.Log("[VNR] Выход из игры.");
+            Application.Quit();
+        }
+    }
+
+    void HandleMainMenuInput()
+    {
+        if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W)) MenuMove(-1);
+        if (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S)) MenuMove(1);
+        if (Input.GetKeyDown(KeyCode.E) || Input.GetKeyDown(KeyCode.Return) ||
+            Input.GetKeyDown(KeyCode.KeypadEnter))
+            MenuActivate(MenuIndex);
+    }
+
+    void RestartScene()
+    {
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+    }
+
     // ------------------------------------------------------------ настройки
 
     /// <summary>Выбрать шаг размера интерфейса (клик по варианту в меню).</summary>
@@ -1046,22 +1294,44 @@ public class NightDirector : MonoBehaviour
         SettingsRow = Mathf.Clamp(row, 0, 1);
     }
 
-    void OpenSettings()
+    /// <summary>Настройки открыты поверх главного меню (закрываться туда же).</summary>
+    public bool SettingsFromMenu { get; private set; }
+
+    void OpenSettings(bool fromMenu = false)
     {
-        settingsPrevInput = Player != null && Player.inputEnabled;
+        SettingsFromMenu = fromMenu;
         SettingsRow = 0;
         modal = ModalKind.Settings;
-        if (Player == null) return;
+        if (fromMenu || Player == null) return; // в меню курсор уже свободен
+        settingsPrevInput = Player.inputEnabled;
         Player.inputEnabled = false;   // станции и действия ждут
         Player.SetCursorLocked(false); // курсор нужен, чтобы выйти из окна
     }
 
     void CloseSettings()
     {
+        if (SettingsFromMenu)
+        {
+            // Открыто из главного меню — возвращаемся туда же,
+            // а не в смену; ввод игрока в меню и так выключен.
+            SettingsFromMenu = false;
+            modal = ModalKind.MainMenu;
+            MenuIndex = 0;
+            return;
+        }
         modal = ModalKind.None;
         if (Player == null) return;
         Player.inputEnabled = settingsPrevInput;
         Player.SetCursorLocked(true);
+    }
+
+    /// <summary>Кнопка «В ГЛАВНОЕ МЕНЮ» в настройках.</summary>
+    public void SettingsToMenu()
+    {
+        SettingsFromMenu = false;
+        modal = ModalKind.MainMenu;
+        MenuIndex = 0;
+        if (Player != null) Player.SetCursorLocked(false);
     }
 
     void HandleSettingsInput()
@@ -1072,10 +1342,13 @@ public class NightDirector : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.RightArrow)) AdjustSetting(1);
     }
 
-    void AdjustSetting(int delta)
+    public void AdjustSetting(int delta)
     {
-        if (SettingsRow == 0) SetUiScale(UiScaleIndex + delta);
-        else SetTypeInScale(TypeInScaleIndex + delta);
+        // Стрелки и мышь крутят по кругу — как в любом нормальном меню.
+        if (SettingsRow == 0)
+            SetUiScale((UiScaleIndex + delta % UiScaleSteps.Length + UiScaleSteps.Length) % UiScaleSteps.Length);
+        else
+            SetTypeInScale((TypeInScaleIndex + delta % TypeInScaleSteps.Length + TypeInScaleSteps.Length) % TypeInScaleSteps.Length);
     }
 
     /// <summary>Отсчёт до звонка шефа после успешного входа в терминал.</summary>
@@ -1280,19 +1553,23 @@ public class NightDirector : MonoBehaviour
         switch (ActiveStation)
         {
             case StationTerminal:
-                Hint = "[T] терминал   ·   TAB — экран   ·   мышь — обзор";
-                break;
             case StationMessenger:
-                Hint = "←→ каналы   ↑↓ прокрутка   ·   TAB — экран   ·   мышь — обзор";
+            {
+                // Куда уйдёт печать — решает прицел; честно показываем это в хинте.
+                string target = TypingStation == StationMessenger
+                    ? "печать → ЧАТ   ·   [←→] каналы"
+                    : "печать → ТЕРМИНАЛ";
+                Hint = target + "   ·   B — кровать   ·   мышь — обзор";
                 break;
+            }
             case StationDesk:
                 string h = "1 — таблетка (" + State.pills + ")   ·   2 — диктофон";
                 if (recordingAvailable && !State.records[recordOfNight]) h += " (новая запись)";
-                h += "   ·   TAB — экран   ·   мышь — обзор";
+                h += "   ·   B — кровать   ·   мышь — обзор";
                 Hint = h;
                 break;
             case StationBed:
-                Hint = "E (удерживать) — отдых   ·   TAB — экран   ·   мышь — обзор";
+                Hint = "E (удерживать) — отдых   ·   мышь — обзор";
                 break;
         }
 
