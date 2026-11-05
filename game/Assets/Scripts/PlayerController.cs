@@ -13,9 +13,9 @@ using UnityEngine;
 /// и ±50° по вертикали), чтобы наводить прицел на предметы. Кликов нет.
 /// Повторное нажатие F1–F4 на текущей станции возвращает взгляд в центр.
 /// Клавиши: TAB / Shift+TAB — соседняя станция, F1–F4 — прямой выбор,
-/// Z (удерживать) — плавный зум камеры.
-/// Буквы и цифры не заняты переключением: на экранах игрок печатает команды,
-/// поэтому зум отключается, пока приложение принимает текст.
+/// левый Alt (удерживать) — плавный зум камеры.
+/// Буквы и цифры не заняты переключением: на экранах игрок печатает команды.
+/// Alt символов не печатает, поэтому зум работает и во время ввода текста.
 /// </summary>
 [DefaultExecutionOrder(-100)] // раньше NightDirector: E успевает забрать фокус до строк ввода
 [RequireComponent(typeof(CharacterController))]
@@ -51,8 +51,8 @@ public class PlayerController : MonoBehaviour
     [Tooltip("Сглаживание мыши: меньше — плавнее и с запаздыванием")]
     public float lookLerp = 20f;
 
-    [Header("Зум камеры (Z, удерживать)")]
-    public KeyCode zoomKey = KeyCode.Z;
+    [Header("Зум камеры (левый Alt, удерживать)")]
+    public KeyCode zoomKey = KeyCode.LeftAlt;
     [Tooltip("Во сколько раз сужается FOV в максимальном зуме")]
     [Range(0.2f, 0.9f)] public float zoomFovScale = 0.55f;
     public float zoomLerp = 8f;
@@ -89,9 +89,18 @@ public class PlayerController : MonoBehaviour
     /// <summary>Esc в этом кадре уже закрыла приближение монитора.</summary>
     public bool EscapeClearedFocus { get; private set; }
 
-    /// <summary>Z удерживается: камера плавно сужает кадр.</summary>
+    /// <summary>Alt удерживается: камера плавно сужает кадр (и во время ввода текста).</summary>
     public bool Zooming =>
-        lookEnabled && inputEnabled && !TextInputActive && Input.GetKey(zoomKey);
+        lookEnabled && inputEnabled && !zoomHeldSinceFocusLoss && Input.GetKey(zoomKey);
+
+    // Alt+Tab: окно теряет фокус при зажатом Alt, отпускание клавиши может
+    // не дойти до игры. Зум блокируется, пока Alt не будет отпущен.
+    bool zoomHeldSinceFocusLoss;
+
+    void OnApplicationFocus(bool hasFocus)
+    {
+        if (!hasFocus) zoomHeldSinceFocusLoss = true;
+    }
 
     /// <summary>Индекс текущей станции: 0 терминал, 1 мессенджер, 2 стол, 3 кровать.</summary>
     public int Current => current;
@@ -329,6 +338,7 @@ public class PlayerController : MonoBehaviour
         focusBlend = Mathf.Lerp(focusBlend, target, 1f - Mathf.Exp(-focusLerp * dt));
         if (Mathf.Abs(focusBlend - target) < 0.001f) focusBlend = target;
 
+        if (zoomHeldSinceFocusLoss && !Input.GetKey(zoomKey)) zoomHeldSinceFocusLoss = false;
         float targetZoom = Zooming ? 1f : 0f;
         zoomBlend = Mathf.Lerp(zoomBlend, targetZoom, 1f - Mathf.Exp(-zoomLerp * dt));
         if (Mathf.Abs(zoomBlend - targetZoom) < 0.001f) zoomBlend = targetZoom;

@@ -350,7 +350,8 @@ namespace VOID.EnvModels
             pb.Refresh();
         }
 
-        static Mesh SaveMesh(Mesh mesh)
+        /// <summary>Сохраняет Mesh в Art/Models; существующий ассет обновляется на месте (GUID прежний).</summary>
+        public static Mesh SaveMesh(Mesh mesh)
         {
             if (!AssetDatabase.IsValidFolder(ModelsDir))
                 AssetDatabase.CreateFolder("Assets/VOID/Art", "Models");

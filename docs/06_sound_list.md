@@ -1,0 +1,339 @@
+# Звук: полный список ассетов
+
+**Дата:** 2026-11-01 · **Ответственный:** Алауддин (весь звук и музыка)
+**Связано:** [05_audit.md](05_audit.md) §8 п.15 (хуки) · [03_assets_checklist.md](03_assets_checklist.md) §6
+
+---
+
+## 0. Что сейчас в коде
+
+| Что | Где | Как |
+|---|---|---|
+| Звонок телефона | `NightDirector.BuildPhoneAudio` | синтез в коде: 880 Гц 0,16 с + 1046 Гц 0,16 с, клип 1,1 с в лупе, 44,1 кГц, громкость 0,35, `spatialBlend 0.35`, `AudioSource` на объекте `Phone` |
+| `AudioListener` | `Main Camera` (создаёт `VoidSceneBuilder`) | один |
+| Остальное | — | **звука нет**, `AudioMixer` нет, музыки нет, голосов нет |
+
+Все события ниже, кроме звонка, **требуют хука** от Жусупа — список событий
+в [05_audit.md](05_audit.md) §8 п.15. Подключение звука — отдельным компонентом
+(например, `VOID/Audio/SoundBank` + `SoundDirector`), который подписывается на
+события и не трогает логику.
+
+Позиции источников в сцене (`Office.unity`), метры:
+`Phone (0.70, 0.74, −1.45)` · `Monitor_Terminal (0.38, 0.74, −1.62)` ·
+`Monitor_Chat (−0.38, 0.74, −1.62)` · `Keyboard (0, 0.74, −1.33)` ·
+`Recorder (0.48, 0.74, −1.30)` · `Pills (−0.58, 0.74, −1.32)` ·
+`Radiator (−0.04, 0.35, −1.95)` · `WindowFrame (0, 1.6, −2.0)` ·
+`Door` — южная стена · `Bed (1.77, 0, 0.97)` · камера (голова) `(0, 1.25, −0.55)`.
+
+---
+
+## 1. Соглашения
+
+- **Имена:** `SFX_`, `AMB_`, `VO_`, `MUS_` + латиница, snake_case, вариации `_01…_12`.
+- **Папки:** `game/Assets/VOID/Audio/` → `SFX/{Keyboard, Phone, Desk, Recorder, UI,
+  States, World}`, `AMB`, `VO`, `MUS`. Какой файл в какой папке — §14; в каждой
+  папке лежит `_FILES.md` со списком ожидаемых файлов. Экспорт из DAW —
+  `D:\VOID_Audio\export\` с той же структурой.
+- **Исходники:** WAV 48 кГц / 24 бит (в `03_assets_checklist.md` сейчас 16 бит —
+  поправить: 24 бит в исходниках, Unity всё равно сожмёт).
+- **Громкость:** фоны и музыка −16 LUFS integrated, пики ≤ −1 dBTP; короткие SFX
+  нормировать по пику −3 dBFS и сводить в микшере. Без лимитера «в кирпич».
+- **Голоса:** сухие, без киношного ревера; русские.
+- **2D/3D:** 2D — «в голове» (состояния, музыка, интерфейс); 3D — из предмета,
+  `spatialBlend 1`, Logarithmic, min 0.3 м, max 6 м (комната 4.7 × 4.2).
+
+Колонки таблиц: **Тип** 2D/3D (источник) · **Луп** L — луп, 1 — одиночный ·
+**Длит.** · **Вар.** — число вариаций · **P** — P0 без него Ночь 1 пустая,
+P1 к сдаче, P2 полировка · **Хук** — где в коде или «нужен».
+
+---
+
+## 2. Фон комнаты (слоями)
+
+Слои играют одновременно, громкость каждого — отдельно, чтобы VOID/тревога
+могли их глушить по одному.
+
+| Файл | Что | Тип | Луп | Длит. | Вар. | P | Хук |
+|---|---|---|---|---|---|---|---|
+| `AMB_room_night` | «тишина» квартиры: низкий гул дома, воздух | 2D | L | 60–90 с | 1 | **P0** | старт сцены |
+| `AMB_pc_fans` | кулеры двух системников, ровный шум | 3D Desk (под столом, 0, 0.3, −1.6) | L | 30–60 с | 1 | **P0** | старт сцены |
+| `AMB_crt_hum` | гул и писк строчника CRT (~15,7 кГц срезать до ~8–10 кГц, иначе режет) | 3D каждый монитор | L | 20–30 с | 2 (терм/чат с разной фазой) | **P0** | старт сцены |
+| `AMB_fridge` + `AMB_fridge_click_01…02` | холодильник за стеной: гул (луп) + щелчки включения/выключения | 3D за южной стеной | L + 1 | 40 с + 2 с | 1 + 2 щелчка | P1 | таймер в звуковом компоненте |
+| `AMB_radiator` + `AMB_radiator_tick_01…04` | батарея: тихое журчание (луп) + редкие тики металла | 3D Radiator | L + 1 | 30 с + тики | 1 + 4 тика | P1 | таймер |
+| `AMB_city_window` | город за окном: далёкая трасса, ветер, без голосов | 3D WindowFrame | L | 60–90 с | 1 | **P0** | старт сцены |
+| `AMB_city_events` | редкие события за окном: далёкая сирена, гул самолёта, собака | 3D WindowFrame | 1 | 5–15 с | 4–6 | P2 | таймер, реже к утру |
+| `AMB_white_noise` | широкополосный шум-подложка (связывает слои, растёт с тревогой) | 2D | L | 30 с | 1 | P1 | `State.anxiety` |
+| `AMB_room_morning` | утро 07:00: птицы/машины чуть громче, серый свет | 3D окно | L | 60 с | 1 | P1 | `NightEnd`, концовка ПУСТОТА |
+| `AMB_clock_tick` | тиканье настенных часов (тихо, слышно в тишине) | 3D WallClock | L | 2 с (1 тик/с) | 1 | P2 | старт сцены |
+
+---
+
+## 3. Клавиатура и ввод
+
+| Файл | Что | Тип | Луп | Длит. | Вар. | P | Хук |
+|---|---|---|---|---|---|---|---|
+| `SFX_key_press_01…12` | обычная клавиша, мембранно-механическая, сухо | 3D Keyboard | 1 | 60–120 мс | **12** | **P0** | нужен `KeyAccepted` (`InputField.Tick`, вставка символа) |
+| `SFX_key_space_01…04` | пробел — ниже и длиннее | 3D Keyboard | 1 | 100–150 мс | 4 | **P0** | `KeyAccepted` с `c == ' '` |
+| `SFX_key_enter_01…04` | Enter — тяжёлый | 3D Keyboard | 1 | 120–180 мс | 4 | **P0** | нужен `Enter` (`TerminalApp`, `MessengerApp`, звонок) |
+| `SFX_key_backspace_01…04` | Backspace | 3D Keyboard | 1 | 80–120 мс | 4 | P1 | нужен `KeyBackspace` |
+| `SFX_key_reject_01…04` | опечатка бессонницы: клавиша нажата «вхолостую» — глухой щелчок без отдачи + короткий тон | 3D Keyboard + 2D тон | 1 | 50–90 мс | 4 | **P0** | нужен `KeyRejected` (`InputField`: `lastReject = Time.time`) |
+| `SFX_key_press_void_01…08` | VOID печатает: ровно, мягко, медленно, одинаково | 3D Keyboard | 1 | 80 мс | 8 | P1 | `KeyAccepted` при `isVoid` |
+| `SFX_key_swap_01…04` | подмена нажатия Бриком (ночь 4): искажённый, «чужой» щелчок | 2D + 3D | 1 | 100 мс | 4 | P1 | нужен `KeySwapped` |
+| `SFX_action_letter` | буква в подписи действия (`PICK UP`) | 2D | 1 | 40 мс | 3 | P2 | `ActionSystem` |
+| `SFX_action_wrong` | неверная буква в подписи | 2D | 1 | 80 мс | 2 | P1 | `ActionSystem.RejectedRecently` |
+
+Правило: питч ±3%, громкость ±2 дБ случайно; одна и та же вариация не два раза подряд.
+
+---
+
+## 4. Терминал, мессенджер, интерфейс экранов
+
+| Файл | Что | Тип | Луп | Длит. | Вар. | P | Хук |
+|---|---|---|---|---|---|---|---|
+| `SFX_login_ok` | вход принят: короткий системный аккорд CRT | 3D терминал | 1 | 0,5 с | 1 | **P0** | `TerminalApp.SubmitLogin` → `Login(true)` |
+| `SFX_login_fail` | неверный пароль | 3D терминал | 1 | 0,3 с | 1 | P1 | `Login(false)` |
+| `SFX_task_ok` | задача закрыта | 3D терминал | 1 | 0,4 с | 2 | **P0** | `NightDirector.OnTaskCompleted` |
+| `SFX_task_error` | неверный ответ | 3D терминал | 1 | 0,3 с | 2 | **P0** | `TerminalApp.SubmitTask` (ветка «НЕВЕРНО») |
+| `SFX_cmd_unknown` | команда не распознана | 3D терминал | 1 | 0,2 с | 1 | P2 | `RunCommand` |
+| `SFX_scan` | сканирование региона — серия тиков | 3D терминал | 1 | 1,5 с | 1 | P1 | `scan` |
+| `SFX_connect` | подключение к серверу — модемный «рукопожатие», коротко | 3D терминал | 1 | 1,2 с | 1 | P1 | `connect` |
+| `SFX_download_loop` | загрузка файла — тихий тональный цикл, темп от `speed` | 3D терминал | L | 2 с | 1 | P1 | нужен `DownloadStart/Done/Abort` |
+| `SFX_download_done` | файл скачан | 3D терминал | 1 | 0,4 с | 1 | P1 | `CompleteDownload` |
+| `SFX_logs_clear` | очистка логов | 3D терминал | 1 | 0,8 с | 1 | P1 | `CleanLogs` |
+| `SFX_chat_incoming` | новое сообщение в мессенджере | 3D мессенджер | 1 | 0,3 с | 2 | **P0** | нужен `ChatMessage(channel)` (`AddChat`) |
+| `SFX_chat_harmony` | сообщение ГАРМОНИИ — мягкий «заботливый» тон | 3D мессенджер | 1 | 0,6 с | 1 | P1 | `AddChat` канал Harmony |
+| `SFX_chat_security` | сообщение кибербезов — сухой тревожный тон | 3D мессенджер | 1 | 0,4 с | 1 | P1 | `AddChat` канал Security |
+| `SFX_chat_boss` | сообщение Виктора | 3D мессенджер | 1 | 0,3 с | 1 | P2 | `AddChat` канал Boss |
+| `SFX_screen_focus` | приближение к монитору (`E`) | 2D | 1 | 0,2 с | 1 | P2 | `PlayerController` focus |
+| `SFX_station_switch` | смена станции (стул, шорох) | 2D | 1 | 0,3–0,6 с | 3 | P1 | `PlayerController` смена `current` |
+
+---
+
+## 5. Телефон и звонок
+
+| Файл | Что | Тип | Луп | Длит. | Вар. | P | Хук |
+|---|---|---|---|---|---|---|---|
+| `SFX_phone_ring` | механический звонок стационарного телефона (замена синтезу) | 3D Phone, `spatialBlend 0.8–1` | L | цикл 3–4 с (звонок + пауза) | 1 | **P0** | `StartRinging` (есть, `ringSource`) |
+| `SFX_phone_ring_distort` | звонок-триггер: искажённый, «под водой» (ночи 3–5) | 3D Phone | L | 4 с | 1 | P1 | `StartRinging` при сюжетном звонке |
+| `SFX_phone_pickup` | снятие трубки: стук + щелчок рычага | 3D Phone | 1 | 0,5 с | 2 | **P0** | `AnswerCall` (`PICK UP`) |
+| `SFX_phone_hangup` | трубка на рычаг | 3D Phone | 1 | 0,5 с | 2 | **P0** | `EndCall(false)` (`HANG UP`) |
+| `SFX_phone_line_hiss` | шипение линии во время разговора | 2D (в ухе) | L | 10 с | 1 | P1 | `Modal == Call` |
+| `SFX_phone_hangup_tone` | гудки после того, как Виктор положил трубку | 2D | 1 | 3 с | 1 | P1 | `EndCall(true)` |
+| `SFX_phone_ring_stop` | звонок оборвался (пропущен) | 3D Phone | 1 | 0,3 с | 1 | P2 | `MissedCall` |
+
+---
+
+## 6. Предметы и действия
+
+| Файл | Что | Тип | Луп | Длит. | Вар. | P | Хук |
+|---|---|---|---|---|---|---|---|
+| `SFX_pill_pop_01…03` | таблетка выдавливается из блистера | 3D Pills | 1 | 0,3 с | 3 | **P0** | `TakePill` |
+| `SFX_pill_swallow` | глоток воды (стакан) | 2D | 1 | 0,8 с | 2 | **P0** | `TakePill` +0,3 с |
+| `SFX_blister_empty` | пустой блистер — шуршание фольги | 3D Pills | 1 | 0,4 с | 1 | P1 | `TakePill` при 0 |
+| `SFX_rest_lie` | лечь на кровать: скрип, ткань | 3D Bed | 1 | 1,0 с | 2 | P1 | нужен `RestStart` (`TickRest`) |
+| `SFX_rest_breath` | медленное дыхание во время отдыха | 2D | L | 4 с | 1 | P1 | `Modal == Rest` |
+| `SFX_rest_get_up` | встать / отмена отдыха | 3D Bed | 1 | 0,8 с | 2 | P2 | `RestDone/Cancel` |
+| `SFX_dict_click_play` | кнопка диктофона Play | 3D Recorder | 1 | 0,15 с | 2 | **P0** | `PlayDictaphone` |
+| `SFX_dict_click_stop` | Stop/конец записи | 3D Recorder | 1 | 0,15 с | 1 | **P0** | `TickDictaphone` (конец) |
+| `SFX_dict_tape_hiss` | шипение плёнки под голосом | 3D Recorder | L | 5 с | 1 | **P0** | `Modal == Dictaphone` |
+| `SFX_dict_moved` | диктофон «не на месте» — едва слышный стук предмета | 3D новая позиция Recorder | 1 | 0,3 с | 1 | P2 | `MoveDictaphone` (звучит во время провала, не при игроке) |
+| `SFX_chair_creak_01…04` | скрип стула при обзоре мышью | 3D Chair | 1 | 0,4 с | 4 | P2 | `PlayerController` резкий поворот |
+
+---
+
+## 7. События, кибербезы, провалы
+
+| Файл | Что | Тип | Луп | Длит. | Вар. | P | Хук |
+|---|---|---|---|---|---|---|---|
+| `SFX_intro_night` | интро «НОЧЬ N · …»: низкий удар + затихание | 2D | 1 | 3 с | 1 | P1 | `Modal == Intro` |
+| `SFX_glitch_01…04` | провал/глитч: цифровой срыв, «зажёванная» плёнка | 2D | 1 | 0,4–1,2 с | 4 | **P0** | событие 04:12 (`DoFlash`), нужен общий `Blackout` |
+| `SFX_blackout_tail` | тишина после провала: звон + вакуум, слои фона возвращаются | 2D | 1 | 2–3 с | 1 | P1 | `Blackout` |
+| `SFX_clock_jump` | часы дёрнулись: двойной тик | 3D WallClock | 1 | 0,3 с | 1 | P1 | 04:12 (`Clock.Advance`) |
+| `SFX_cyber_tick` | КД кибербезов < 60 с — тихий метроном | 2D | L | 1 с | 1 | P1 | `CyberDanger == true` |
+| `SFX_cyber_check_clean` | плановая проверка: чисто | 3D мессенджер | 1 | 0,5 с | 1 | P1 | `TickCyberbez` |
+| `SFX_cyber_check_dirty` | плановая проверка: грязные логи | 3D мессенджер + 2D удар | 1 | 1,0 с | 1 | P1 | `TickCyberbez` (dirty) |
+| `SFX_cyber_alarm` | пойман/утечка | 2D | 1 | 2 с | 1 | P1 | `StartCaught` |
+| `SFX_knock_door_01…03` | стук в дверь квартиры: от сдержанного до тяжёлого | 3D Door | 1 | 2–4 с | 3 | P1 | `StartCyberDeath`, концовка NO RETURN |
+| `SFX_shift_end` | 07:00 — конец смены (тихий будильник/системный тон) | 2D | 1 | 2 с | 1 | **P0** | `EndNight` |
+| `SFX_death_heart_stop` | смерть от тревоги: сердце сбивается и обрывается, экран гаснет, последним — писк CRT | 2D | 1 | 4–6 с | 1 | P1 | `StartDeath` |
+| `SFX_persona_switch` | смена личности: звонок → белый шум → тон, «щелчок» тишины | 2D | 1 | 3–5 с | 1 | P1 | нужен `PersonaSwitch` (ночь 3, 06:50) |
+| `SFX_white_flash` | экран в белый (06:50 ночь 3) | 2D | 1 | 2 с | 1 | P1 | `PersonaSwitch` |
+| `SFX_qte_struggle` | QTE BRICK ED: пульс, искажения, борьба | 2D | L | 8 с | 1 | P2 | ночь 5 |
+| `SFX_dc7_down` | ДЦ-7 падает: каскад отключений, гаснущие графики | 3D терминал + 2D | 1 | 4 с | 1 | P2 | концовка NO RETURN |
+| `SFX_logout` | `logout` | 3D терминал | 1 | 0,5 с | 1 | P2 | концовка NO RETURN |
+
+---
+
+## 8. Состояния (непрерывные слои)
+
+### Тревога (`State.anxiety` 0–100)
+
+| Файл | Что | Тип | Луп | Длит. | P | Управление |
+|---|---|---|---|---|---|---|
+| `SFX_heartbeat_slow` | сердцебиение 70–80 уд/мин | 2D | L | 4–8 уд. | **P0** | громкость с 40%, полная к 60% |
+| `SFX_heartbeat_fast` | 120–140 уд/мин, с «двойным» ударом | 2D | L | 4–8 уд. | **P0** | кроссфейд с `slow` на 70–85% |
+| `SFX_breath_anxious` | неровное дыхание через нос | 2D | L | 8 с | P1 | с 55% |
+| `SFX_anxiety_drone` | низкий тон, нарастающий фильтр | 2D | L | 30 с | P1 | с 25% (вместе с виньеткой) |
+
+Микшер: снапшот **Anxiety** (см. §12) — фон тише и глуше (LPF), сердце и дыхание громче.
+
+### Бессонница (`State.insomnia` 1–5)
+
+| Файл | Что | Тип | Луп | P | Управление |
+|---|---|---|---|---|---|
+| `SFX_tinnitus` | звон в ушах ~6–8 кГц, мягкий | 2D | L 20 с | P1 | громкость = 0.05 × (insomnia − 1); короткий всплеск на `KeyRejected` |
+
+### VOID (ночи 4–5, `State.isVoid`)
+
+Как меняется весь звук:
+- фон «вычищен»: нет города, нет кулеров — только ровный гул (`AMB_void_room`);
+- клавиатура мягкая и одинаковая (`SFX_key_press_void_*`), без опечаток;
+- нет сердцебиения и тревожных слоёв;
+- ГАРМОНИЯ и уведомления — громче, «приятнее»;
+- прорывы Брика: короткие вспышки старого фона + `SFX_key_swap_*` + шёпот (`VO_brick_thought_*`).
+
+| Файл | Что | Тип | Луп | P |
+|---|---|---|---|---|
+| `AMB_void_room` | стерильный ровный гул, без деталей | 2D | L 60 с | P1 |
+| `SFX_brick_breakthrough_01…04` | прорыв Брика: всплеск шума, обрывок дыхания | 2D | 1 | P1 |
+
+### Провал/глитч — см. §7 (`SFX_glitch_*`, `SFX_blackout_tail`).
+
+---
+
+## 9. Голос (VO)
+
+Все — русские, сухие. **Текстов, которых ещё нет — отмечены ❌.**
+
+| Файл | Кто / что | Текст | Тип | Длит. | P |
+|---|---|---|---|---|---|
+| `VO_record_01` | VOID (голос Брика, тихий, чужой) | «Зачем ты это делаешь? У тебя есть работа. Нормальная работа.» ✅ (PDF) | 3D Recorder + плёнка | ~5 с | **P0** |
+| `VO_record_02` | VOID, настойчивее | «Ты не спишь уже неделю. Я сплю за тебя и убираю за тобой. Остановись, пока я прошу по-хорошему.» ✅ | 3D Recorder | ~8 с | P1 |
+| `VO_record_03` | VOID, крик, обрыв | «Я ИСПРАВЛЯЮ, А ТЫ ЛОМАЕШЬ! Кто-то из нас должен ходить на работу! ХВАТИТ!» ✅ | 3D Recorder | ~7 с | P1 |
+| `VO_record_brick` | Брик, нервно | «Если ты это слушаешь, значит я опять пропал. Не отдавай им код Куплинова.» ✅ | 3D Recorder | ~6 с | P1 |
+| `VO_viktor_n1_*` | Виктор, ночь 1 | в коде: «Брик. Это Виктор. Как смена?», «Хорошо. Задачи закрыты. Продолжай.», «Задачи не закрыты. К семи всё должно быть готово.» 🟡 (каркас, PDF: «реплики Виктора — напишем позже») | 2D (в трубке, телефонный фильтр) | 2–4 с каждая | **P0** (3 реплики) |
+| `VO_viktor_n2_*` | Виктор, ночь 2: вопрос про конкретный вход («что ты делал на SRV-009 в 02:14?») | ❌ | 2D | — | P1 |
+| `VO_viktor_n3_*` | Виктор, ночь 3 + звонок 06:50 | ❌ | 2D | — | P1 |
+| `VO_viktor_n4_*` | Виктор, ночь 4 (VOID отвечает идеально) | ❌ | 2D | — | P1 |
+| `VO_viktor_n5_*` | Виктор, ночь 5 ~04:00, последний звонок | ❌ | 2D | — | P1 |
+| `VO_viktor_reprimand` | выговор в начале ночи за невыполненные задачи | ❌ | 2D | — | P1 |
+| `VO_viktor_thanks` | «Спасибо за отличную смену» (ПУСТОТА) | ✅ (PDF, текст в чате; голос — по желанию) | 2D | 2 с | P2 |
+| `VO_harmony_*` | ГАРМОНИЯ — нужен ли голос? Сейчас только текст в чате | тексты в коде ✅; решение «озвучивать или нет» ❌ | 3D мессенджер, синтетика | — | P2 |
+| `VO_brick_thought_01…06` | мысли Брика поверх экрана (ночь 4), шёпот | ❌ | 2D | 1–3 с | P2 |
+| `VO_void_answer_*` | VOID говорит с Виктором (ночь 4) | ❌ | 2D | — | P2 |
+
+Нужно от автора сценария: реплики Виктора на ночи 2–5 и выговор, мысли Брика для
+ночи 4, решение по голосу ГАРМОНИИ.
+
+---
+
+## 10. Музыка (MUS)
+
+В коде поддержки музыки **нет**. Нужен компонент, который держит 2–4 `AudioSource`
+с синхронным стартом (`PlayScheduled`) и меняет громкость стемов по состоянию.
+
+| Файл | Тема | Когда | Стемы | Длит. | P |
+|---|---|---|---|---|---|
+| `MUS_night_calm` | спокойная ночь: редкий эмбиент, почти фон | ночи 1–3, обычная работа | `_pad`, `_pulse`, `_texture` | луп 2–3 мин | P1 |
+| `MUS_hack` | взлом: тот же темп/тональность, добавляется ритм | `connect` … `exit`, загрузка | `_rhythm`, `_bass` поверх `night_calm` | луп 1–2 мин | P1 |
+| `MUS_anxiety` | тревога: диссонанс, растущий слой | тревога > 55%, КД < 60 с | `_dissonance`, `_riser` | луп 1 мин | P1 |
+| `MUS_void` | VOID: тихий стерильный дрон, «офисная» гармония без жизни | ночи 4–5 | `_drone`, `_bells` | луп 3 мин | P1 |
+| `MUS_ending_noreturn` | NO RETURN: тишина → одинокая тема после стука | концовка | одиночный | 1,5–2 мин | P2 |
+| `MUS_ending_void` | ПУСТОТА: «приятная» корпоративная тема, слишком ровная | концовка | одиночный | 1,5–2 мин | P2 |
+| `MUS_title` | меню/титры | титры | одиночный | 2 мин | P2 |
+
+**Стемы нужны:** `night_calm` + `hack` + `anxiety` — одна тональность и темп
+(например, 70 BPM, ре минор), одинаковая длина лупа, экспорт стемов от нуля
+такта. Тогда переходы — кроссфейд громкостей стемов, без склеек. `MUS_void` —
+отдельная тема, переход через провал/белый экран.
+
+Как сейчас поддержано в коде: **никак**. Нужны значения `State.anxiety`,
+`CyberDanger`, «подключён к серверу» (`TerminalApp.connected` — приватное, нужен
+геттер) и `State.isVoid`.
+
+---
+
+## 11. Импорт в Unity
+
+| Группа | Load Type | Compression | Quality | Preload | Force To Mono | Прочее |
+|---|---|---|---|---|---|---|
+| Короткие SFX (клавиши, клики, < 1 с) | Decompress On Load | ADPCM | — | ✅ | ✅ если 3D | Normalize выкл. |
+| Средние SFX (звонок, глитч, стук, 1–6 с) | Compressed In Memory | Vorbis | 70 | ✅ | ✅ если 3D | |
+| Фоны `AMB_*` (луп) | Streaming | Vorbis | 60 | — | 3D-фоны — ✅; `AMB_room_night` — стерео | Load In Background ✅ |
+| Голос `VO_*` | Compressed In Memory | Vorbis | 80 | ✅ (короткие) | ✅ | |
+| Музыка `MUS_*` и стемы | Streaming | Vorbis | 70 | — | — (стерео) | стемы одной длины, без «Normalize» |
+
+Sample Rate Setting: Preserve (48 кГц). Для 3D-источников `Force To Mono`
+обязательно — стерео-клип в 3D позиционируется хуже.
+
+---
+
+## 12. Структура AudioMixer (предложение — не создавать, решить с Жусупом)
+
+```
+Master
+├── Music              (стемы MUS_*)
+├── Ambience
+│   ├── Room           AMB_room_night, AMB_fridge, AMB_radiator, AMB_clock_tick
+│   ├── Tech           AMB_pc_fans, AMB_crt_hum
+│   └── City           AMB_city_window, AMB_city_events
+├── SFX
+│   ├── Input          клавиатура, подписи действий
+│   ├── Screens        терминал, мессенджер, кибербезы
+│   ├── World          телефон, предметы, дверь
+│   └── States         сердце, дыхание, звон, глитч   (не глушится снапшотом Anxiety)
+└── VO
+    ├── Phone          Виктор (телефонный EQ: HPF 300 Гц, LPF 3,4 кГц)
+    └── Recorder       записи диктофона (плёнка, лёгкая сатурация)
+```
+
+**Снапшоты:**
+
+| Снапшот | Когда | Что меняется |
+|---|---|---|
+| **Normal** | базовый | всё по умолчанию |
+| **Anxiety** | тревога > 55% (вес по `anxiety`) | Ambience −6 дБ + LPF 2–4 кГц, Music −3 дБ, States +3 дБ |
+| **Void** | ночи 4–5 | City и Tech −∞ (или −20), Input мягче (LPF), Music → `MUS_void`, States −∞ |
+| Call (доп.) | разговор | Ambience −8 дБ, Music −10 дБ, VO/Phone на первом плане |
+| Blackout (доп.) | провал | всё кроме States −20 дБ на 1–3 с |
+
+Exposed-параметры: `MasterVol`, `MusicVol`, `SfxVol`, `VoVol`, `AmbVol` — для меню
+настроек (сейчас в ESC только размер текста).
+
+---
+
+## 13. P0 на сегодня (Ночь 1 перестаёт звучать пусто)
+
+1. `AMB_room_night`, `AMB_pc_fans`, `AMB_crt_hum` ×2, `AMB_city_window`
+2. `SFX_key_press_01…12`, `SFX_key_space_01…04`, `SFX_key_enter_01…04`, `SFX_key_reject_01…04`
+3. `SFX_phone_ring`, `SFX_phone_pickup`, `SFX_phone_hangup`
+4. `SFX_login_ok`, `SFX_task_ok`, `SFX_task_error`, `SFX_chat_incoming`
+5. `SFX_pill_pop_01…03`, `SFX_pill_swallow`
+6. `SFX_dict_click_play`, `SFX_dict_click_stop`, `SFX_dict_tape_hiss`, `VO_record_01`
+7. `SFX_glitch_01…04`, `SFX_heartbeat_slow`, `SFX_heartbeat_fast`, `SFX_shift_end`
+8. `VO_viktor_n1_*` — 3 реплики из кода (если записывать голос сейчас)
+
+Без хуков от Жусупа из этого сразу заработают только фоны (старт сцены) и
+`SFX_phone_ring` (подменить клип в `ringSource`). Для остального нужен п.15 из
+[05_audit.md](05_audit.md).
+
+---
+
+## 14. Раскладка по папкам
+
+Корень: `game/Assets/VOID/Audio/`. Экспорт из DAW — в `D:\VOID_Audio\export\`
+с той же структурой. В каждой папке проекта — `_FILES.md` со списком файлов.
+
+| Папка | Файлы |
+|---|---|
+| `SFX/Keyboard/` | `SFX_key_press_01…12`, `SFX_key_space_01…04`, `SFX_key_enter_01…04`, `SFX_key_reject_01…04`, `SFX_key_backspace_01…04`, `SFX_key_press_void_01…08`, `SFX_key_swap_01…04`, `SFX_action_wrong_01…02`, `SFX_action_letter_01…03` |
+| `SFX/Phone/` | `SFX_phone_ring`, `SFX_phone_pickup_01…02`, `SFX_phone_hangup_01…02`, `SFX_phone_ring_distort`, `SFX_phone_line_hiss`, `SFX_phone_hangup_tone`, `SFX_phone_ring_stop` |
+| `SFX/Desk/` | `SFX_pill_pop_01…03`, `SFX_pill_swallow_01…02`, `SFX_blister_empty`, `SFX_rest_lie_01…02`, `SFX_rest_get_up_01…02` |
+| `SFX/Recorder/` | `SFX_dict_click_play_01…02`, `SFX_dict_click_stop`, `SFX_dict_tape_hiss`, `SFX_dict_moved` |
+| `SFX/UI/` | `SFX_login_ok`, `SFX_task_ok_01…02`, `SFX_task_error_01…02`, `SFX_chat_incoming_01…02`, `SFX_login_fail`, `SFX_scan`, `SFX_connect`, `SFX_download_loop`, `SFX_download_done`, `SFX_logs_clear`, `SFX_chat_harmony`, `SFX_chat_security`, `SFX_cyber_tick`, `SFX_cyber_check_clean`, `SFX_cyber_check_dirty`, `SFX_cyber_alarm`, `SFX_cmd_unknown`, `SFX_chat_boss`, `SFX_screen_focus`, `SFX_dc7_down`, `SFX_logout` |
+| `SFX/States/` | `SFX_glitch_01…04`, `SFX_heartbeat_slow`, `SFX_heartbeat_fast`, `SFX_intro_night`, `SFX_blackout_tail`, `SFX_breath_anxious`, `SFX_anxiety_drone`, `SFX_tinnitus`, `SFX_rest_breath`, `SFX_death_heart_stop`, `SFX_persona_switch`, `SFX_white_flash`, `SFX_brick_breakthrough_01…04`, `SFX_qte_struggle` |
+| `SFX/World/` | `SFX_shift_end`, `SFX_station_switch_01…03`, `SFX_clock_jump`, `SFX_knock_door_01…03`, `SFX_chair_creak_01…04` |
+| `AMB/` | `AMB_room_night`, `AMB_pc_fans`, `AMB_crt_hum_01…02`, `AMB_city_window`, `AMB_fridge`, `AMB_fridge_click_01…02`, `AMB_radiator`, `AMB_radiator_tick_01…04`, `AMB_white_noise`, `AMB_room_morning`, `AMB_void_room`, `AMB_city_events_01…06`, `AMB_clock_tick` |
+| `VO/` | `VO_record_01`, `VO_viktor_n1_01…03`, `VO_record_02`, `VO_record_03`, `VO_record_brick`, `VO_viktor_n2_01…` (текста нет), `VO_viktor_n3_01…` (текста нет), `VO_viktor_n4_01…` (текста нет), `VO_viktor_n5_01…` (текста нет), `VO_viktor_reprimand_01…` (текста нет), `VO_viktor_thanks`, `VO_harmony_01…` (текста нет), `VO_brick_thought_01…06`, `VO_void_answer_01…` (текста нет) |
+| `MUS/` | `MUS_night_calm_{pad,pulse,texture}`, `MUS_hack_{rhythm,bass}`, `MUS_anxiety_{dissonance,riser}`, `MUS_void_{drone,bells}`, `MUS_ending_noreturn`, `MUS_ending_void`, `MUS_title` |
+

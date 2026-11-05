@@ -29,16 +29,16 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _Brightness: 1.3
-    - _ChromaShift: 0.6
-    - _Curvature: 0.06
+    - _Brightness: 1.15
+    - _ChromaShift: 0.15
+    - _Curvature: 0.03
     - _Darken: 0
     - _Flicker: 0.015
     - _Glitch: 0
-    - _Glow: 0.7
-    - _GlowRadius: 2.5
-    - _ScanlineCount: 320
-    - _Scanlines: 0.18
+    - _Glow: 0.3
+    - _GlowRadius: 1.25
+    - _ScanlineCount: 240
+    - _Scanlines: 0.1
     - _Seed: 0
     - _Vignette: 0.35
     m_Colors: []
