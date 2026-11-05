@@ -24,6 +24,7 @@ public class GameState
     [Header("Прогресс саботажа")]
     public int planStep;           // 0 — разведка не сделана, 1 — ДЦ-7 найден
     public int suspicion;          // 0..100, кибербезы
+    public int cyberStrikes;       // сколько проверок уже застали грязные логи
 
     // Индексы совпадают с trust: 0 — Джоэл, 1 — Дэлайла, 2 — Куплинов.
     public static readonly string[] EmployeeCodes = { "a-5120", "a-4471", "a-6643" };
@@ -57,6 +58,7 @@ public class GameState
         moodAnswered = false;
         planStep = 0;
         suspicion = 0;
+        cyberStrikes = 0;
         dirtyLogs = false;
         tasksDone = 0;
         missionReady = false;

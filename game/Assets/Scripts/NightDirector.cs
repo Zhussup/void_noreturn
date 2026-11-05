@@ -193,6 +193,11 @@ public class NightDirector : MonoBehaviour
     int callNumber; // какой это звонок за смену (ночь 3 звонит трижды)
 
     float cyberCd = 300f;
+    // Эскалация грязных логов: извинение → внутреннее расследование → ордер.
+    bool investigating;
+    int warrantMinute = -1;    // игровая минута, когда шеф пишет про ордер
+    float warrantRealAt = -1f; // фактический приход кибербезов (реальное время)
+    float suspDrift;
     float logCleanReady;
     int lastMinute = -1;
 
@@ -974,6 +979,7 @@ public class NightDirector : MonoBehaviour
             // Загрузка идёт даже вне терминала: за ней надо следить.
             if (terminal != null) terminal.TickDownload(Time.deltaTime);
             TickCyberbez(Time.deltaTime);
+            TickWarrant(Time.deltaTime);
             TickEvents();
             TickAnxiety(Time.deltaTime);
             TickCallDelay(Time.deltaTime);
@@ -1139,24 +1145,106 @@ public class NightDirector : MonoBehaviour
                 return;
             }
 
-            // Плановая проверка: грязные логи бьют по тревоге.
+            // Плановая проверка: грязные логи эскалируют от «извинился» до ордера.
             if (State.dirtyLogs)
             {
-                AddAnxiety(4f + 0.05f * State.suspicion);
-                AddChat(ChatChannel.Security, "КИБЕРБЕЗОПАСНОСТЬ",
-                    "ПЛАНОВАЯ ПРОВЕРКА ЛОГОВ: ГРЯЗНЫЕ, СЛЕД " + State.suspicion + "%.", Clock.Display);
+                State.cyberStrikes++;
+                State.suspicion = Mathf.Min(100, State.suspicion + 15);
+
+                if (State.cyberStrikes == 1)
+                {
+                    // Первый «пал»: Брик оправдывается, пока отделался испугом.
+                    AddChat(ChatChannel.Security, "КИБЕРБЕЗОПАСНОСТЬ",
+                        "ПЛАНОВАЯ ПРОВЕРКА ЛОГОВ: ГРЯЗНЫЕ, СЛЕД " + State.suspicion +
+                        "%. ОБЪЯСНИТЕСЬ. ПОДПИСИ ВЫПОЛНЯТЬ.", Clock.Display);
+                    ShowSubtitle("«Случайно. Лишние процессы, я их выпишу. Вечером всё почищу.»", 5f);
+                    AddAnxiety(8f);
+                }
+                else if (!investigating)
+                {
+                    // Второй: расследование — ордер придёт через 15 игровых минут.
+                    investigating = true;
+                    AddChat(ChatChannel.Security, "КИБЕРБЕЗОПАСНОСТЬ",
+                        "ПРОВЕРКА ЛОГОВ: ГРЯЗНЫЕ ВТОРОЙ РАЗ. ПОЛОЖЕНИЕ ОБ ИНФ. БЕЗОПАСНОСТИ, П. 14.",
+                        Clock.Display);
+                    AddChat(ChatChannel.Security, "КИБЕРБЕЗОПАСНОСТЬ",
+                        "НАЧАТО ВНУТРЕННЕЕ РАССЛЕДОВАНИЕ. ОЖИДАЙТЕ РЕШЕНИЯ.", Clock.Display);
+                    ShowSubtitle("«Это всё ошибка. Оправдаюсь же…»", 4f);
+                    AddAnxiety(12f);
+                    warrantMinute = Clock.WholeMinutes + 15; // шеф напишет через 15 игровых минут
+                }
             }
             else
             {
                 AddChat(ChatChannel.Security, "КИБЕРБЕЗОПАСНОСТЬ",
                     "ПЛАНОВАЯ ПРОВЕРКА ЛОГОВ: НАРУШЕНИЙ НЕТ.", Clock.Display);
             }
+
+            // след растёт медленно, пока логи грязные — даже между проверками
+            if (State.dirtyLogs && !exploded)
+            {
+                suspDrift += 0.28f * dt;
+                if (suspDrift >= 1f)
+                {
+                    int bump = Mathf.FloorToInt(suspDrift);
+                    suspDrift -= bump;
+                    State.suspicion = Mathf.Min(100, State.suspicion + bump);
+                }
+            }
+
             if (State.suspicion >= 100) StartCyberDeath();
-            else State.suspicion = Mathf.Min(100, State.suspicion + 1);
         }
         int sec = Mathf.Max(0, Mathf.CeilToInt(cyberCd));
         CyberCdText = (sec / 60).ToString("00") + ":" + (sec % 60).ToString("00");
         CyberDanger = cyberCd < 60f;
+    }
+
+    /// <summary>
+    /// Ордер: после «второго пала» шеф пишет через 15 игровых минут, а ещё через
+    /// несколько секунд за Бриком приходят — на это время игрок может прочитать сообщение.
+    /// </summary>
+    void TickWarrant(float dt)
+    {
+        if (warrantRealAt > 0f)
+        {
+            if (Time.time >= warrantRealAt)
+            {
+                warrantRealAt = -1f;
+                StartWarrantDeath();
+            }
+            return;
+        }
+        if (warrantMinute < 0) return;
+        if (Clock.WholeMinutes < warrantMinute) return;
+
+        warrantMinute = -1;
+        investigating = false;
+        AddChat(ChatChannel.Boss, "ВИКТОР",
+            "Эд. Мне принесли ордер на твой арест. Не ждал такого. Извини.", Clock.Display);
+        ShowSubtitle("Не звонок. Шаги — в соседней комнате.", 6f);
+        AddAnxiety(20f);
+        warrantRealAt = Time.time + 9f; // 9 секунд понять, что всё
+    }
+
+    void StartWarrantDeath()
+    {
+        if (modal == ModalKind.Death) return;
+        retryNight = State.night;
+        StopMusic();
+        if (ringSource != null) ringSource.Stop();
+        phone = PhoneState.Idle;
+        modal = ModalKind.Death;
+        Running = false;
+        Clock.running = false;
+        if (Player != null) Player.inputEnabled = false;
+        EndTitle = "ПРИШЛИ ПО ОРДЕРУ.";
+        EndLines = new[]
+        {
+            "Внутреннее расследование вывернулось не в твою пользу.",
+            "Бумагу подписал шеф. Дверь открыли своим ключом.",
+            "",
+            "R — начать ночь заново",
+        };
     }
 
     void TickAnxiety(float dt)
