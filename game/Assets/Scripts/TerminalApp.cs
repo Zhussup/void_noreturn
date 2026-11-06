@@ -197,6 +197,8 @@ public class TerminalApp
     float logsMsgUntil;
 
     public bool Downloading => downloadFile != null;
+    public int DownloadPct =>
+        downloadFile != null ? Mathf.RoundToInt(downloadProgress * 100f) : 0;
     public string CurrentDownload => downloadFile;
     public string DownloadStatus =>
         downloadFile != null

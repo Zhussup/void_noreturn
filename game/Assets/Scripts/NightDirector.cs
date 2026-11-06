@@ -280,6 +280,7 @@ public class NightDirector : MonoBehaviour
     /// <summary>Идёт загрузка файла с сервера сотрудника (для HUD и проверки кибербезов).</summary>
     public bool TerminalDownloading => terminal != null && terminal.Downloading;
     public string TerminalDownloadText => terminal != null ? terminal.DownloadStatus : "";
+    public int TerminalDownloadPct => terminal != null ? terminal.DownloadPct : 0;
 
     // ------------------------------------------------------------ внутреннее
 

@@ -89,6 +89,37 @@ public class MessengerApp
         }
     }
 
+    // ------------------------------------------------------------------
+    // Статус смены (бывший HUD) — две строки на самом экране мессенджера.
+    // По одной строке — вся смена: тревога/бессонница, след/кибербезы/
+    // таблетки/загрузка. У границ строка желтеет или краснеет.
+    // ------------------------------------------------------------------
+
+    ScreenLine HudAnxiety()
+    {
+        float a = Mathf.Clamp(dir.State.anxiety, 0f, 100f);
+        int p = Mathf.RoundToInt(a);
+        string t = "ТРЕВОГА " + p + "%";
+        if (p >= 75) t += "  100 — КОНЕЦ";
+        else if (p >= 55 && dir.State.pills > 0) t += "  1 — ПРИНЯТЬ";
+        t += "  БЕССОННИЦА " + dir.State.insomnia + "/5";
+        return new ScreenLine(t, p >= 75 ? Err : p >= 55 ? Warn : Dim);
+    }
+
+    ScreenLine HudLog()
+    {
+        string t = "СЛЕД " + Mathf.RoundToInt(dir.State.suspicion) + "%";
+        if (dir.State.suspicion >= 75f) t += "  100 — ОРДЕР";
+        else if (dir.State.dirtyLogs) t += " ГРЯЗНО";
+        t += "  КИБЕРБЕЗЫ " + dir.CyberCdText;
+        if (dir.CyberDanger) t += " СЕЙЧАС";
+        t += "  ТАБЛ " + dir.State.pills;
+        if (dir.TerminalDownloading) t += "  ЗАГРУЗКА " + dir.TerminalDownloadPct + "%";
+        Color c = dir.CyberDanger || dir.State.suspicion >= 75f ? Err
+                : dir.State.dirtyLogs ? Warn : Dim;
+        return new ScreenLine(t, c);
+    }
+
     void Flash(string text, Color color)
     {
         message = text;
@@ -103,6 +134,11 @@ public class MessengerApp
         string header = "ГАНДЕКС · МЕССЕНДЖЕР   " + dir.Clock.Display;
         if (dir.PhoneRinging) header += "   ВХОДЯЩИЙ ЗВОНОК";
         L.Add(new ScreenLine(header, dir.PhoneRinging ? Warn : Dim));
+
+        // HUD переехал на правый монитор: панель в углу кадра обрезалась
+        // окном Game view на 1x, а экран чата виден всегда.
+        L.Add(HudAnxiety());
+        L.Add(HudLog());
 
         string tabs = "";
         for (int i = 0; i < 4; i++)
@@ -135,7 +171,7 @@ public class MessengerApp
         // Нижние две строки зарезервированы под ввод и подсказку; остальное —
         // лента. Считаем от фактического числа строк экрана: при крупном
         // тексте строк меньше, и жёсткая константа обрезала бы ввод.
-        int visible = Mathf.Max(1, s.Rows - 5);
+        int visible = Mathf.Max(1, s.Rows - 7); // 2 строки съел HUD-статус
         int maxScroll = Mathf.Max(0, lines.Count - visible);
         scroll = Mathf.Clamp(scroll, 0, maxScroll);
         int start = Mathf.Max(0, lines.Count - visible - scroll);
