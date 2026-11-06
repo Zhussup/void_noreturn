@@ -128,6 +128,9 @@ public class NightDirector : MonoBehaviour
                 if (!State.filesSold.Contains("dc7_route.log")) SellStolenFile("dc7_route.log", 155);
                 if (!State.filesSold.Contains("dc7_backup.key")) SellStolenFile("dc7_backup.key", 260);
                 if (!State.filesSold.Contains("dc7_final.key")) SellStolenFile("dc7_final.key", 470);
+                // геолокация идёт только ТЕРРА — читом закрываем тоже
+                RegisterStolenFile(GeoFile);
+                if (!State.filesSold.Contains(GeoFile)) SellStolenFile(GeoFile, GeoPrice);
                 State.deals += 1; // прямая сделка ТЕРРА засчитана
                 State.terraTrust = Mathf.Min(100, State.terraTrust + 20);
                 AddTerra("ТЕРРА", "дев-чит: файлы засчитаны как проданные.");
@@ -255,6 +258,20 @@ public class NightDirector : MonoBehaviour
 
     /// <summary>Названия смен: интро, отчёты, финалы. Сборка = 3 ночи.</summary>
     static readonly string[] NightTitles = { "СМЕНА", "ТЕРРА", "ТЕРМИНАЛЬНАЯ СТАДИЯ" };
+
+    /// <summary>Вставить строку про «ГОЛОС» в титры/эпилог после блока данных ДЦ.</summary>
+    string[] WithInvested(string[] src, string line)
+    {
+        var l = new List<string>(src);
+        for (int i = 0; i < l.Count; i++)
+            if (l[i].StartsWith("ДЦ-11") || l[i].StartsWith("Брик научился"))
+            {
+                l.Insert(Mathf.Min(i + 1, l.Count), "");
+                l.Insert(Mathf.Min(i + 2, l.Count), line);
+                break;
+            }
+        return l.ToArray();
+    }
     static string TitleOf(int night) => "НОЧЬ " + Mathf.Clamp(night, 1, 3) +
         " · «" + NightTitles[Mathf.Clamp(night - 1, 0, NightTitles.Length - 1)] + "»";
 
@@ -648,6 +665,12 @@ public class NightDirector : MonoBehaviour
         events.Add(new Evt(15, () =>
         {
             UnlockTerra();
+            // Главная цель ТЕРРА: геолокация ДЦ-7. Её надо найти самому
+            // среди личных серверов сотрудников и продать только им.
+            AddOffer("ТЕРРА", GeoFile, GeoPrice);
+            AddTerra("ТЕРРА", "особый заказ: геолокация дц-7. 10000 кр.");
+            AddTerra("ТЕРРА", "прячется в личных файлах сотрудника. ls/grep по всем трём серверам.");
+            AddTerra("ТЕРРА", "рынку её не продавай: они платят копейки и не спрашивают.");
             AddTerra("pixel_reaper", "гандекс. говорят, у тебя есть с сервера.");
             AddTerra("pixel_reaper", "не молчи. терра всегда в сети.");
             OpenChoice(ChoiceC1, pick =>
@@ -817,6 +840,11 @@ public class NightDirector : MonoBehaviour
                 AddOffer("pixel_reaper", "dc7_backup.key", 260);
             if (!State.filesSold.Contains("dc7_final.key"))
                 AddOffer("ZER0_ANN", "dc7_final.key", 470, true);
+            if (!State.filesSold.Contains(GeoFile))
+            {
+                AddOffer("ТЕРРА", GeoFile, GeoPrice); // геолокацию ждут все три ночи
+                AddTerra("ТЕРРА", "геолокация? без неё работа не закрыта. 10000 кр.");
+            }
             AddChat(ChatChannel.Team, "ДЭЛАЙЛА",
                 "сирены по всему кварталу. это учение?", Clock.Display);
         }));
@@ -2070,6 +2098,12 @@ public class NightDirector : MonoBehaviour
     public bool TerraUnlocked; // форум появился в браузере (событие ночи 2)
     public bool exploded;      // ночь 3, 06:50: дата-центры упали
 
+    /// <summary>Геолокация ДЦ-7 — спрятанный файл, покупается только ТЕРРА.</summary>
+    public const string GeoFile = "tower_coords.txt";
+    public const int GeoPrice = 10000;
+    /// <summary>Геолокация продана ТЕРРА (условие финала).</summary>
+    public bool GeoSold => State != null && State.filesSold.Contains(GeoFile);
+
     public string[] ChoiceOptions; // null — открытого выбора нет
     public int ChoiceIndex;
     System.Action<int> onChoice;
@@ -2155,7 +2189,10 @@ public class NightDirector : MonoBehaviour
     /// <summary>06:00 ночь 3: принята ли работа ТЕРРА к дедлайну.</summary>
     void CheckMission()
     {
-        State.missionReady = SoldTargets() >= 3 && State.deals >= 1;
+        // Условие финала: три целевых файла, сделка напрямую через ТЕРРА
+        // и проданная геолокация ДЦ-7 (её принимает только ТЕРРА).
+        State.missionReady = SoldTargets() >= 3 && State.deals >= 1 &&
+                             State.filesSold.Contains(GeoFile);
         if (State.missionReady)
         {
             AddTerra("ТЕРРА", "работа принята. в 06:50.");
@@ -2165,6 +2202,12 @@ public class NightDirector : MonoBehaviour
         else
         {
             AddTerra("ТЕРРА", "дедлайн. терра не ждёт.");
+            if (SoldTargets() < 3)
+                AddTerra("ТЕРРА", "файлы. где файлы?");
+            else if (State.deals < 1)
+                AddTerra("ТЕРРА", "мы с тобой даже не сделку закрыли.");
+            else if (!State.filesSold.Contains(GeoFile))
+                AddTerra("ТЕРРА", "а геолокацию? без неё никак. где она?");
             ShowSubtitle("ТЕРРА: «дедлайн. терра не ждёт».", 4.5f);
         }
     }
@@ -2187,6 +2230,7 @@ public class NightDirector : MonoBehaviour
     void EnterCredits()
     {
         if (modal == ModalKind.Credits) return;
+        if (State.invested) CreditsLines = WithInvested(CreditsLines, "ГОЛОС ПЕЧАТАЕТ АРХИВ ГАНДЕКСА · утро принесёт заголовки");
         StopMusic();
         if (ringSource != null) ringSource.Stop();
         phone = PhoneState.Idle;
@@ -2201,6 +2245,7 @@ public class NightDirector : MonoBehaviour
     void StartEpilogue()
     {
         if (modal == ModalKind.Epilogue) return;
+        if (State.invested) EpilogueLines = WithInvested(EpilogueLines, "ГОЛОС набрал выпуск. Утром страну прочтут про ДЦ-7.");
         StopMusic();
         if (ringSource != null) ringSource.Stop();
         phone = PhoneState.Idle;
@@ -2333,6 +2378,12 @@ public class NightDirector : MonoBehaviour
             lines.Add("ТЕРРА: сделок " + State.deals +
                       " · доверие " + State.terraTrust + "%");
             lines.Add("Продано целевых: " + SoldTargets() + "/3");
+            lines.Add("Геолокация ДЦ-7: " +
+                      (State.filesSold.Contains(GeoFile)
+                          ? "продана ТЕРРА за 10000"
+                          : "не найдена"));
+            lines.Add("ГОЛОС (журналисты): " +
+                      (State.invested ? "инвестиция принята" : "без инвестиций"));
         }
 
         lines.Add("");
