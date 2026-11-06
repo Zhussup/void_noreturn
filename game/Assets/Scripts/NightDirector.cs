@@ -2082,7 +2082,13 @@ public class NightDirector : MonoBehaviour
     public bool ChoiceActive => ChoiceOptions != null;
 
     /// <summary>Добавить форум в браузер (событие смены).</summary>
-    public void UnlockTerra() => TerraUnlocked = true;
+    public void UnlockTerra()
+    {
+        if (TerraUnlocked) return;
+        TerraUnlocked = true;
+        // Явная подсказка: без неё игрок не знает, что форум вообще появился.
+        ShowSubtitle("БРАУЗЕР: открылся ТЕНЕВОЙ ФОРУМ «ТЕРРА».", 3.5f);
+    }
 
     /// <summary>Реплика покупателя на форуме.</summary>
     public void AddTerra(string sender, string text)

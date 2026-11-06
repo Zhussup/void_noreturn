@@ -952,7 +952,12 @@ public class TerminalApp
         L.Add(new ScreenLine("", C));
         L.Add(new ScreenLine("BRICK.E · ДИУ-2 · НОЧНАЯ СМЕНА", C));
         L.Add(new ScreenLine("ЗАДАЧ НА НОЧЬ: " + dir.Tasks.Count, C));
-        L.Add(new ScreenLine("ПЛАН: РАЗВЕДКА ДЦ-7", Dim));
+        // План смены по ночам — у игрока должен быть ориентир с первого экрана.
+        L.Add(new ScreenLine(dir.State.night == 2
+            ? "ПЛАН: в 00:15 ТЕРРА выйдет на связь — браузер"
+            : dir.State.night >= 3
+                ? "ПЛАН: до 06:00 продать всё ТЕРРА (браузер)"
+                : "ПЛАН: РАЗВЕДКА ДЦ-7", Dim));
         L.Add(new ScreenLine("", C));
         L.Add(new ScreenLine("07:00 — конец смены. Не закрытые", Dim));
         L.Add(new ScreenLine("задачи — выговор и падение доверия.", Dim));
