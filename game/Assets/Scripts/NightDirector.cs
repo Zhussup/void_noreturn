@@ -1298,9 +1298,10 @@ public class NightDirector : MonoBehaviour
             "НОВАЯ СМЕНА",
             "ПРОДОЛЖИТЬ · НОЧЬ " + Mathf.Clamp(Campaign.CurrentNight, 1, 3),
             "НАСТРОЙКИ",
+            "ТИТРЫ",
             "ВЫХОД",
         }
-        : new[] { "НОВАЯ СМЕНА", "НАСТРОЙКИ", "ВЫХОД" };
+        : new[] { "НОВАЯ СМЕНА", "НАСТРОЙКИ", "ТИТРЫ", "ВЫХОД" };
 
     public void MenuMove(int delta)
     {
@@ -1322,15 +1323,19 @@ public class NightDirector : MonoBehaviour
             retryNight = 1;
             RestartScene();
         }
-        else if (item == 1 && n == 4)
+        else if (item == 1 && n == 5)
         {
             // Продолжить с последнего закрытого сняка сессии.
             retryNight = Mathf.Clamp(Campaign.CurrentNight, 1, 3);
             RestartScene();
         }
-        else if (item == (n == 4 ? 2 : 1))
+        else if (item == (n == 5 ? 2 : 1))
         {
             OpenSettings(fromMenu: true);
+        }
+        else if (item == (n == 5 ? 3 : 2))
+        {
+            CreditsRoll.Open();
         }
         else
         {
@@ -1341,6 +1346,7 @@ public class NightDirector : MonoBehaviour
 
     void HandleMainMenuInput()
     {
+        if (CreditsRoll.IsOpen) return;
         if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W)) MenuMove(-1);
         if (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S)) MenuMove(1);
         if (Input.GetKeyDown(KeyCode.E) || Input.GetKeyDown(KeyCode.Return) ||
