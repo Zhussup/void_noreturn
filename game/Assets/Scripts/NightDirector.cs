@@ -1611,8 +1611,7 @@ public class NightDirector : MonoBehaviour
                     : "печать → ТЕРМИНАЛ";
                 Hint = target + "   ·   B — кровать   ·   мышь — обзор";
                 break;
-            }
-            case StationDesk:
+            }            case StationDesk:
                 string h = "1 — таблетка (" + State.pills + ")   ·   2 — диктофон";
                 if (recordingAvailable && !State.records[recordOfNight]) h += " (новая запись)";
                 h += "   ·   B — кровать   ·   мышь — обзор";

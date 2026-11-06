@@ -15,6 +15,7 @@ public class OverlayUI : MonoBehaviour
 
     GUIStyle center, title, endStyle, callName, callLine, callInput, hintStyle, subtitleStyle;
     GUIStyle interactionLabel, inputPreview, settingsTitle, settingsOption, settingsValue;
+    GUIStyle menuOption, menuValue;
     GUIStyle hudText, hudWarn, hudBad, hudName, hudVal, hudWarnVal, hudBadVal;
     float styledScale = -1f;
     float styledTypeInScale = -1f;
@@ -64,7 +65,7 @@ public class OverlayUI : MonoBehaviour
         center.normal.textColor = Color.white;
 
         title = new GUIStyle(center);
-        title.fontSize = Mathf.Max(28, Mathf.RoundToInt(Screen.height * 0.052f * s));
+        title.fontSize = Mathf.Max(28, Mathf.RoundToInt(Screen.height * 0.052f));
         title.normal.textColor = new Color(0.90f, 0.96f, 0.92f);
 
         endStyle = new GUIStyle(center);
@@ -90,16 +91,18 @@ public class OverlayUI : MonoBehaviour
         hintStyle = new GUIStyle(center);
         // Хинты обязаны читаться на любом размере вью: минимум 15px и
         // заметно светлее фона, плюс тёмная полоса-подложка при отрисовке.
-        hintStyle.fontSize = Mathf.Max(15, Mathf.RoundToInt(Screen.height * 0.021f * s));
+        // HUD-текст НЕ масштабируется от UiScale: настройка «РАЗМЕР ТЕКСТА»
+        // затрагивает только мониторы; оверлеи всегда в базовом размере.
+        hintStyle.fontSize = Mathf.Max(15, Mathf.RoundToInt(Screen.height * 0.021f));
         hintStyle.normal.textColor = new Color(0.78f, 0.83f, 0.80f, 0.95f);
 
         subtitleStyle = new GUIStyle(center);
-        subtitleStyle.fontSize = Mathf.RoundToInt(Screen.height * 0.022f * s);
+        subtitleStyle.fontSize = Mathf.RoundToInt(Screen.height * 0.022f);
         subtitleStyle.normal.textColor = new Color(0.92f, 0.95f, 0.92f);
 
         interactionLabel = new GUIStyle(center);
         // Подпись действия читается поверх мира с рабочего места — крупнее прочего текста.
-        interactionLabel.fontSize = Mathf.RoundToInt(Screen.height * 0.030f * s);
+        interactionLabel.fontSize = Mathf.RoundToInt(Screen.height * 0.030f);
         interactionLabel.alignment = TextAnchor.MiddleCenter;
         interactionLabel.wordWrap = false;
         interactionLabel.normal.textColor = new Color(0.92f, 0.95f, 0.92f, 0.95f);
@@ -122,7 +125,16 @@ public class OverlayUI : MonoBehaviour
         settingsValue.normal.textColor = new Color(1f, 0.76f, 0.29f);
 
         hudText = new GUIStyle(center);
-        hudText.fontSize = Mathf.Max(14, Mathf.RoundToInt(Screen.height * 0.019f * s));
+        hudText.fontSize = Mathf.Max(14, Mathf.RoundToInt(Screen.height * 0.019f));
+
+        // Пункты главного меню — тоже вне UiScale (см. DrawStatusHud).
+        menuOption = new GUIStyle(center);
+        menuOption.fontSize = Mathf.Max(16, Mathf.RoundToInt(Screen.height * 0.028f));
+        menuOption.wordWrap = false;
+        menuOption.normal.textColor = new Color(0.62f, 0.68f, 0.64f);
+
+        menuValue = new GUIStyle(menuOption);
+        menuValue.normal.textColor = new Color(1f, 0.76f, 0.29f);
         hudText.alignment = TextAnchor.MiddleLeft;
         hudText.wordWrap = false;
         hudText.normal.textColor = new Color(0.72f, 0.79f, 0.75f, 0.90f);
@@ -199,13 +211,11 @@ public class OverlayUI : MonoBehaviour
 
         if (dir.CheatsOpen) DrawDevPanel(w, h);
 
-        float s = dir.UiScale;
-
         if ((dir.Modal == ModalKind.None || dir.Modal == ModalKind.Dictaphone)
             && !string.IsNullOrEmpty(dir.Subtitle))
         {
-            Rect band = new Rect(w * 0.5f - Mathf.Min(460f * s, w * 0.44f), h - h * 0.16f * s,
-                                 Mathf.Min(920f * s, w * 0.88f), h * 0.10f * s);
+            Rect band = new Rect(w * 0.5f - Mathf.Min(460f, w * 0.44f), h - h * 0.14f,
+                                 Mathf.Min(920f, w * 0.88f), h * 0.085f);
             DrawBand(band, 0.62f);
             GUI.Label(band, dir.Subtitle, subtitleStyle);
         }
@@ -213,7 +223,7 @@ public class OverlayUI : MonoBehaviour
         if (dir.Modal == ModalKind.None && dir.Running &&
             !string.IsNullOrEmpty(dir.Hint))
         {
-            var r = new Rect(0f, h - h * 0.045f * s, w, h * 0.04f * s);
+            var r = new Rect(0f, h - h * 0.042f, w, h * 0.038f);
             DrawBand(r, 0.60f);
             GUI.Label(r, dir.Hint, hintStyle);
         }
@@ -225,16 +235,18 @@ public class OverlayUI : MonoBehaviour
     /// </summary>
     void DrawStatusHud(float w, float h)
     {
-        float s = dir.UiScale;
+        // HUD не реагирует на UiScale — он всегда в базовом размере «1x»,
+        // иначе настройка «РАЗМЕР ТЕКСТА» уводила панель из кадра.
+        const float s = 1f;
         float lineH = hudText.lineHeight + 3f * s;
         float pad = 10f * s;
-        float panelW = Mathf.Min(320f * s, w * 0.46f);
+        float panelW = Mathf.Min(340f * s, w * 0.46f);
         bool downloading = dir.TerminalDownloading;
         float panelH = pad * 2f + lineH * (downloading ? 7f : 6f) + 18f * s;
 
         var panel = new Rect(16f * s - pad, 16f * s - pad, panelW, panelH);
-        DrawSolid(panel, new Color(0.02f, 0.03f, 0.025f, 0.55f));
-        DrawBorder(panel, Mathf.Max(1f, s), new Color(1f, 1f, 1f, 0.10f));
+        DrawSolid(panel, new Color(0.02f, 0.03f, 0.025f, 0.85f));
+        DrawBorder(panel, Mathf.Max(2f, s), new Color(0.85f, 0.95f, 0.90f, 0.35f));
 
         float x = panel.x + pad;
         float y = panel.y + pad;
@@ -268,12 +280,15 @@ public class OverlayUI : MonoBehaviour
                   dir.State.insomnia >= 4 ? hudWarnVal : hudVal);
         y += lineH;
 
-        // След: кибербезы следят за логами; 100% — ордер.
+        // След: кибербезы следят за логами; при 100% — ордер на арест.
         bool dirty = dir.State.dirtyLogs;
+        GUIStyle suspicionStyle = dir.State.suspicion >= 75f ? hudBadVal
+                                : dirty ? hudWarnVal : hudVal;
+        string suspicionNote = dir.State.suspicion >= 75f ? "  100 — ОРДЕР"
+                             : dirty ? "   ГРЯЗНО" : "";
         GUI.Label(new Rect(x, y, nameW, lineH), "СЛЕД В ЛОГАХ", hudName);
         GUI.Label(new Rect(valX, y, valW, lineH),
-                  dir.State.suspicion + "%" + (dirty ? "   ГРЯЗНО" : ""),
-                  dirty ? hudWarnVal : hudVal);
+                  dir.State.suspicion + "%" + suspicionNote, suspicionStyle);
         y += lineH;
         DrawBar(new Rect(x, y - 2f * s, textW, 3f * s), dir.State.suspicion / 100f,
                 dirty ? new Color(1f, 0.76f, 0.29f, 0.90f)
@@ -329,8 +344,7 @@ public class OverlayUI : MonoBehaviour
         if (string.IsNullOrEmpty(label)) return;
 
         GUIStyle style = interactionLabel;
-        float textW = style.CalcSize(new GUIContent(label)).x + 8f;
-        float textH = style.lineHeight > 1f ? style.lineHeight : h * 0.03f;
+        float textW = style.CalcSize(new GUIContent(label)).x + 8f;        float textH = style.lineHeight > 1f ? style.lineHeight : h * 0.03f;
         float x = w * 0.5f - textW * 0.5f;
         float y = h * 0.5f + h * 0.035f;
 
@@ -360,7 +374,8 @@ public class OverlayUI : MonoBehaviour
     /// </summary>
     void DrawMainMenu(float w, float h)
     {
-        float s = dir.UiScale;
+        // Меню — оверлей: фиксированный базовый размер, вне UiScale.
+        const float s = 1f;
 
         DrawSolid(new Rect(0, 0, w, h), new Color(0.012f, 0.02f, 0.016f, 1f));
 
@@ -370,7 +385,7 @@ public class OverlayUI : MonoBehaviour
 
         string[] items = dir.MainMenuItems;
         float itemW = Mathf.Min(380f * s, w * 0.8f);
-        float itemH = settingsOption.lineHeight + 16f * s;
+        float itemH = menuOption.lineHeight + 16f * s;
         float y0 = h * 0.47f;
 
         for (int i = 0; i < items.Length; i++)
@@ -385,7 +400,7 @@ public class OverlayUI : MonoBehaviour
             DrawBorder(r, Mathf.Max(1f, s),
                        lit ? new Color(1f, 0.76f, 0.29f, 0.8f)
                            : new Color(1f, 1f, 1f, 0.12f));
-            GUI.Label(r, items[i], lit ? Centered(settingsValue) : Centered(settingsOption));
+            GUI.Label(r, items[i], lit ? Centered(menuValue) : Centered(menuOption));
 
             // Курсор в меню свободен — пункт можно выбрать и кликом.
             if (GUI.Button(r, GUIContent.none, GUIStyle.none)) dir.MenuActivate(i);
@@ -480,7 +495,7 @@ public class OverlayUI : MonoBehaviour
         GUI.Label(new Rect(x, y, iw, titleH), "НАСТРОЙКИ", settingsTitle);
         y += titleH + sectionGap;
 
-        y = DrawScaleRow(x, y, iw, rowH, s, "РАЗМЕР ТЕКСТА",
+        y = DrawScaleRow(x, y, iw, rowH, s, "РАЗМЕР ТЕКСТА ЭКРАНОВ",
                          NightDirector.UiScaleSteps, dir.UiScaleIndex, 0) + sectionGap;
         y = DrawScaleRow(x, y, iw, rowH, s, "РАЗМЕР ТЕКСТА ВВОДА",
                          NightDirector.TypeInScaleSteps, dir.TypeInScaleIndex, 1) + sectionGap;
