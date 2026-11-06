@@ -11,6 +11,9 @@ public class OverlayUI : MonoBehaviour
     Font font;        // шрифт мониторов (OS-шрифт) — в IMGUI непригоден
     Font imguiFont;   // встроенный шрифт для оверлеев IMGUI
 
+    /// <summary>Встроенный шрифт крупнее прежнего ОС-шрифта — глобальный кегль оверлеев.</summary>
+    const float ImguiFontScale = 0.7f;
+
     Texture2D vignette;
     Texture2D white;
 
@@ -72,48 +75,49 @@ public class OverlayUI : MonoBehaviour
 
         center = new GUIStyle(GUI.skin.label);
         center.font = imguiFont;
-        center.fontSize = Mathf.RoundToInt(Screen.height * 0.026f * s);
+        // Встроенный шрифт заметно крупнее прежнего ОС-шрифта — держим ~70%.
+        center.fontSize = Mathf.RoundToInt(Screen.height * 0.026f * s * ImguiFontScale);
         center.alignment = TextAnchor.MiddleCenter;
         center.wordWrap = true;
         center.normal.textColor = Color.white;
 
         title = new GUIStyle(center);
-        title.fontSize = Mathf.Max(28, Mathf.RoundToInt(Screen.height * 0.052f));
+        title.fontSize = Mathf.Max(28, Mathf.RoundToInt(Screen.height * 0.052f * ImguiFontScale));
         title.normal.textColor = new Color(0.90f, 0.96f, 0.92f);
 
         endStyle = new GUIStyle(center);
-        endStyle.fontSize = Mathf.Max(16, Mathf.RoundToInt(Screen.height * 0.026f * s));
+        endStyle.fontSize = Mathf.Max(16, Mathf.RoundToInt(Screen.height * 0.026f * s * ImguiFontScale));
         endStyle.wordWrap = true;
         endStyle.normal.textColor = new Color(0.88f, 0.93f, 0.90f);
 
         callName = new GUIStyle(center);
-        callName.fontSize = Mathf.RoundToInt(Screen.height * 0.019f * s);
+        callName.fontSize = Mathf.RoundToInt(Screen.height * 0.019f * s * ImguiFontScale);
         callName.alignment = TextAnchor.MiddleLeft;
         callName.normal.textColor = new Color(1f, 0.76f, 0.29f);
 
         callLine = new GUIStyle(center);
-        callLine.fontSize = Mathf.RoundToInt(Screen.height * 0.021f * s);
+        callLine.fontSize = Mathf.RoundToInt(Screen.height * 0.021f * s * ImguiFontScale);
         callLine.alignment = TextAnchor.MiddleLeft;
         callLine.normal.textColor = new Color(0.90f, 0.93f, 0.90f);
 
         callInput = new GUIStyle(center);
-        callInput.fontSize = Mathf.RoundToInt(Screen.height * 0.021f * s * ti);
+        callInput.fontSize = Mathf.RoundToInt(Screen.height * 0.021f * s * ti * ImguiFontScale);
         callInput.alignment = TextAnchor.MiddleLeft;
         callInput.normal.textColor = Color.white;
 
         hintStyle = new GUIStyle(center);
         // Мелкие подсказки внутри оверлеев (звонок); сами хинты станции
         // теперь живут на мониторах (TerminalApp / MessengerApp).
-        hintStyle.fontSize = Mathf.Max(15, Mathf.RoundToInt(Screen.height * 0.021f));
+        hintStyle.fontSize = Mathf.Max(14, Mathf.RoundToInt(Screen.height * 0.021f * ImguiFontScale));
         hintStyle.normal.textColor = new Color(0.78f, 0.83f, 0.80f, 0.95f);
 
         subtitleStyle = new GUIStyle(center);
-        subtitleStyle.fontSize = Mathf.RoundToInt(Screen.height * 0.022f);
+        subtitleStyle.fontSize = Mathf.RoundToInt(Screen.height * 0.022f * ImguiFontScale);
         subtitleStyle.normal.textColor = new Color(0.92f, 0.95f, 0.92f);
 
         interactionLabel = new GUIStyle(center);
         // Подпись действия читается поверх мира с рабочего места — крупнее прочего текста.
-        interactionLabel.fontSize = Mathf.RoundToInt(Screen.height * 0.030f);
+        interactionLabel.fontSize = Mathf.RoundToInt(Screen.height * 0.030f * ImguiFontScale);
         interactionLabel.alignment = TextAnchor.MiddleCenter;
         interactionLabel.wordWrap = false;
         interactionLabel.normal.textColor = new Color(0.92f, 0.95f, 0.92f, 0.95f);

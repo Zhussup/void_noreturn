@@ -99,25 +99,35 @@ public class MessengerApp
     {
         float a = Mathf.Clamp(dir.State.anxiety, 0f, 100f);
         int p = Mathf.RoundToInt(a);
-        string t = "ТРЕВОГА " + p + "%";
+        string t = "ТРЕВОГА " + Bar(a / 100f, 10) + " " + p + "%";
         if (p >= 75) t += "  100 — КОНЕЦ";
         else if (p >= 55 && dir.State.pills > 0) t += "  1 — ПРИНЯТЬ";
-        t += "  БЕССОННИЦА " + dir.State.insomnia + "/5";
+        t += "  БЕССОННИЦА " + Bar(dir.State.insomnia / 5f, 5) + " " + dir.State.insomnia + "/5";
         return new ScreenLine(t, p >= 75 ? Err : p >= 55 ? Warn : Dim);
     }
 
     ScreenLine HudLog()
     {
-        string t = "СЛЕД " + Mathf.RoundToInt(dir.State.suspicion) + "%";
+        string t = "СЛЕД " + Bar(Mathf.Clamp(dir.State.suspicion, 0f, 100f) / 100f, 10) +
+                   " " + Mathf.RoundToInt(dir.State.suspicion) + "%";
         if (dir.State.suspicion >= 75f) t += "  100 — ОРДЕР";
         else if (dir.State.dirtyLogs) t += " ГРЯЗНО";
         t += "  КИБЕРБЕЗЫ " + dir.CyberCdText;
         if (dir.CyberDanger) t += " СЕЙЧАС";
-        t += "  ТАБЛ " + dir.State.pills;
-        if (dir.TerminalDownloading) t += "  ЗАГРУЗКА " + dir.TerminalDownloadPct + "%";
+        // Пока идёт загрузка — показываем её; таблетки в это время видны в хинте.
+        t += dir.TerminalDownloading
+            ? "  ЗАГР " + dir.TerminalDownloadPct + "%"
+            : "  ТАБЛ " + dir.State.pills;
         Color c = dir.CyberDanger || dir.State.suspicion >= 75f ? Err
                 : dir.State.dirtyLogs ? Warn : Dim;
         return new ScreenLine(t, c);
+    }
+
+    /// <summary>Полоска-градусник из блоков: █ — заполнено, ░ — пусто.</summary>
+    static string Bar(float frac, int width)
+    {
+        int fill = Mathf.Clamp(Mathf.RoundToInt(Mathf.Clamp01(frac) * width), 0, width);
+        return new string('█', fill) + new string('░', width - fill);
     }
 
     void Flash(string text, Color color)
