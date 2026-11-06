@@ -137,7 +137,9 @@ public class CreditsRoll : MonoBehaviour
     void Draw(Rect rect, string text, int size, Color color, float k)
     {
         GUIStyle style = StyleOf(size, k);
-        style.normal.textColor = color;
+        // Проект в Linear, а IMGUI без обратного шага темнит палитру экранов.
+        style.normal.textColor =
+            QualitySettings.activeColorSpace == ColorSpace.Linear ? color.gamma : color;
         GUI.Label(rect, text, style);
     }
 
