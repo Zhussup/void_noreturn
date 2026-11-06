@@ -159,13 +159,12 @@ public class OverlayUI : MonoBehaviour
             DrawRest(w, h);
         else if (dir.Modal == ModalKind.Call)
             DrawCall(w, h);
-        else if (dir.Modal == ModalKind.Death || dir.Modal == ModalKind.End)
-            DrawEnd(w, h);
         else if (dir.Modal == ModalKind.Credits)
             DrawCredits(w, h);
         else if (dir.Modal == ModalKind.Epilogue)
             DrawEpilogue(w, h);
-        // Главное меню и настройки рисуются на экране терминала (TerminalApp).
+        // Отчёт смены и проигрыши рисуются на экране терминала (TerminalApp);
+        // главное меню и настройки — тоже там.
 
         if (dir.CheatsOpen) DrawDevPanel(w, h);
 
@@ -277,30 +276,7 @@ public class OverlayUI : MonoBehaviour
         return s;
     }
 
-    // Настройки и главное меню рисуются на экране терминала (TerminalApp).
-
-    void DrawEnd(float w, float h)
-    {
-        GUI.color = new Color(0f, 0f, 0f, 0.93f);
-        GUI.DrawTexture(new Rect(0f, 0f, w, h), white);
-        GUI.color = Color.white;
-
-        GUI.Label(new Rect(0f, h * 0.16f, w, h * 0.09f), dir.EndTitle, title);
-
-        string body = "";
-        for (int i = 0; i < dir.EndLines.Length; i++)
-            body += dir.EndLines[i] + (i + 1 < dir.EndLines.Length ? "\n" : "");
-
-        // Если строк много или UI-масштаб крупный — уменьшаем кегль ровно
-        // настолько, чтобы весь отчёт поместился, но не мельче читаемого.
-        int lines = Mathf.Max(1, dir.EndLines.Length);
-        int maxFont = Mathf.Max(12, Mathf.FloorToInt(h * 0.56f / (lines * 1.2f)));
-        var bodyStyle = new GUIStyle(endStyle);
-        bodyStyle.fontSize = Mathf.Min(endStyle.fontSize, maxFont);
-        bodyStyle.wordWrap = true;
-
-        GUI.Label(new Rect(w * 0.10f, h * 0.27f, w * 0.80f, h * 0.62f), body, bodyStyle);
-    }
+    // Настройки, главное меню и отчёты рисуются на экране терминала (TerminalApp).
 
     void DrawBand(Rect r, float alpha)
     {

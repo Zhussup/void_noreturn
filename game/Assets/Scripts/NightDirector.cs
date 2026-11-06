@@ -1567,7 +1567,7 @@ public class NightDirector : MonoBehaviour
         modal = ModalKind.Death;
         Running = false;
         Clock.running = false;
-        if (Player != null) Player.inputEnabled = false;
+        if (Player != null) { Player.inputEnabled = false; Player.SnapToStation(StationTerminal); }
         EndTitle = "ПРИШЛИ ПО ОРДЕРУ.";
         EndLines = new[]
         {
@@ -2227,7 +2227,7 @@ public class NightDirector : MonoBehaviour
         modal = ModalKind.Death;
         Running = false;
         Clock.running = false;
-        if (Player != null) Player.inputEnabled = false;
+        if (Player != null) { Player.inputEnabled = false; Player.SnapToStation(StationTerminal); }
         EndTitle = "СЕРДЦЕ НЕ ВЫДЕРЖАЛО.";
         EndLines = new[]
         {
@@ -2247,7 +2247,7 @@ public class NightDirector : MonoBehaviour
         modal = ModalKind.Death;
         Running = false;
         Clock.running = false;
-        if (Player != null) Player.inputEnabled = false;
+        if (Player != null) { Player.inputEnabled = false; Player.SnapToStation(StationTerminal); }
         EndTitle = "ПРИШЛИ В 04:12.";
         EndLines = new[]
         {
@@ -2269,7 +2269,7 @@ public class NightDirector : MonoBehaviour
         modal = ModalKind.Death;
         Running = false;
         Clock.running = false;
-        if (Player != null) Player.inputEnabled = false;
+        if (Player != null) { Player.inputEnabled = false; Player.SnapToStation(StationTerminal); }
         EndTitle = "ВЫ СОВЕРШИЛИ ОШИБКУ";
         EndLines = new[]
         {
@@ -2289,7 +2289,12 @@ public class NightDirector : MonoBehaviour
         modal = ModalKind.End;
         Running = false;
         Clock.running = false;
-        if (Player != null) Player.inputEnabled = false;
+        if (Player != null)
+        {
+            Player.inputEnabled = false;
+            // Отчёт рисуется на терминальном мониторе — разворачиваем к нему.
+            Player.SnapToStation(StationTerminal);
+        }
 
         if (AllTasksDone())
             for (int i = 0; i < State.trust.Length; i++)

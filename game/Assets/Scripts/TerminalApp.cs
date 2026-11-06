@@ -848,6 +848,10 @@ public class TerminalApp
         // вместо панелей поверх кадра (те обрезались окном Game view).
         if (dir.Modal == ModalKind.MainMenu) { RenderMainMenu(L); s.Set(L); return; }
         if (dir.Modal == ModalKind.Settings) { RenderSettings(L); s.Set(L); return; }
+        // Отчёт смены и проигрыши — тоже дизгетические: на терминальном
+        // мониторе, а не панелью IMGUI поверх кадра.
+        if (dir.Modal == ModalKind.End || dir.Modal == ModalKind.Death)
+        { RenderReport(L); s.Set(L); return; }
 
         string header = "GANDEX-OS · ДИУ-2   " + dir.Clock.Display +
                         "   ЗАДАЧ " + dir.TasksDone + "/" + dir.Tasks.Count;
@@ -910,6 +914,21 @@ public class TerminalApp
         L.Add(new ScreenLine("", C));
         L.Add(new ScreenLine("←→ — размер   ESC — " +
             (dir.SettingsFromMenu ? "в главное меню" : "вернуться в смену"), Dim));
+    }
+
+    /// <summary>Отчёт смены / проигрыш — на мониторе, как главное меню.</summary>
+    void RenderReport(List<ScreenLine> L)
+    {
+        L.Add(new ScreenLine(dir.EndTitle, White, 1.4f));
+        L.Add(new ScreenLine(new string('-', s.Cols), Lines));
+        for (int i = 0; i < dir.EndLines.Length; i++)
+        {
+            string t = dir.EndLines[i];
+            if (t.Length == 0) { L.Add(new ScreenLine("", C)); continue; }
+            // строки-клавиши внизу отчёта приглушаем, тело — обычным цветом
+            bool hint = t.StartsWith("R —") || t.StartsWith("E —");
+            L.Add(new ScreenLine(t, hint ? Dim : C));
+        }
     }
 
     void Blank(List<ScreenLine> L) => L.Add(new ScreenLine("", C));
