@@ -1129,6 +1129,9 @@ public class NightDirector : MonoBehaviour
                 Player.SetCursorLocked(false);
             }
             HandleMainMenuInput();
+            // Меню живёт на терминальном мониторе — экраны рисуются и тут,
+            // хотя обычный тик смены дальше не идёт.
+            RenderScreens();
             return;
         }
 
@@ -1228,13 +1231,19 @@ public class NightDirector : MonoBehaviour
         TickDictaphone();
         TickRest();
 
-        if (terminalSurface != null && terminal != null) terminal.Render();
-        if (messengerSurface != null && messenger != null) messenger.Render();
+        RenderScreens();
 
         UpdateClockVisual();
         UpdatePhoneLed();
         UpdateHint();
         UpdateVisuals();
+    }
+
+    /// <summary>Перерисовать оба монитора (терминал и правый экран чата).</summary>
+    void RenderScreens()
+    {
+        if (terminalSurface != null && terminal != null) terminal.Render();
+        if (messengerSurface != null && messenger != null) messenger.Render();
     }
 
     // ------------------------------------------------------------ главное меню
