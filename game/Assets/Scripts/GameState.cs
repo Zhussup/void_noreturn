@@ -39,6 +39,7 @@ public class GameState
 
     [Header("Теневой рынок")]
     public int credits;            // выручка за проданные данные
+    public bool invested;          // 10000 кр. вложены в журналистов «ГОЛОС»
 
     [Header("ТЕРРА · покупатели")]
     public List<string> filesTaken = new List<string>(); // скачанные целевые файлы

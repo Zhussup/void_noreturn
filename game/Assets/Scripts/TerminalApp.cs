@@ -127,6 +127,7 @@ public class TerminalApp
             new ServerFile("printer_queue.txt", "Очередь печати, 3 задания."),
             new ServerFile("backup_plan.txt", "План резервного копирования."),
             new ServerFile("incident_log.txt", "Инцидент 12.03: ложное срабатывание."),
+            new ServerFile("tower_coords.txt", "ГЕОЛОКАЦИЯ ДЦ-7: координаты, глубина. НЕ ДЛЯ ОТЧЁТА.", true),
             new ServerFile("readme.txt", "Сервер КУПЛИНОВА. Не лезть.")),
     };
 
@@ -166,6 +167,22 @@ public class TerminalApp
             "серверах. Ищи упоминания ДЦ-7",
             "через grep, скачивай и продавай",
             "на теневом рынке."),
+        new NoteEntry("ПРОДАЖИ",
+            "РЫНОК (браузер [1]) — фикс. цены:",
+            "  120 / 200 / 350 кр. за целевые.",
+            "ТЕРРА (форум [3], со второй ночи)",
+            "  платит больше: 155 / 260 / 470 кр.",
+            "Не сливать всё сразу: оставь файл",
+            "  покупателям — их сделка нужна",
+            "  для финала.",
+            "ГЕОЛОКАЦИЯ (tower_coords.txt):",
+            "  спрятана в личных файлах одного из",
+            "  сотрудников — ls/grep по всем трём",
+            "  серверам. Рынку не продаётся:",
+            "  только ТЕРРА, 10000 кр.",
+            "Деньги с геолокации вложи в ГОЛОС",
+            "(браузер [6]) — журналисты против",
+            "ГАНДЕКСА. Их выпуск — ваше алиби."),
         new NoteEntry("ЧИСТЫЕ ЛОГИ",
             "Подключение к серверу и запрос",
             "кодов пачкают логи. Приложение",
@@ -356,6 +373,18 @@ public class TerminalApp
                         if (enter) SellTerraSelected();
                     }
                     else browserSel = 0;
+                }
+                else if (browserPage == 6)
+                {
+                    if (enter && !dir.State.invested &&
+                        dir.State.credits >= NightDirector.GeoPrice)
+                    {
+                        dir.State.credits -= NightDirector.GeoPrice;
+                        dir.State.invested = true;
+                        browserMsg = "ИНВЕСТИЦИЯ ПРИНЯТА: ГОЛОС ПЕЧАТАЕТ.";
+                        browserMsgUntil = Time.time + 3f;
+                        dir.AddTerra("ТЕРРА", "деньги журналистам? наглость. одобряем.");
+                    }
                 }
                 else if (enter) browserPage = 0;
                 break;
@@ -1177,10 +1206,14 @@ public class TerminalApp
                 for (int i = start; i < n && i < start + maxRows; i++)
                 {
                     string name = dir.State.filesTaken[i];
-                    string line = (i == browserSel ? "▸ " : "  ") + name +
-                                  "   " + MarketPrice(name) + " кр.";
+                    string extra = name == NightDirector.GeoFile
+                        ? "   ТОЛЬКО ТЕРРА · " + NightDirector.GeoPrice + " кр."
+                        : "   " + MarketPrice(name) + " кр.";
+                    string line = (i == browserSel ? "▸ " : "  ") + name + extra;
                     L.Add(new ScreenLine(line, i == browserSel ? White : C));
                 }
+                // Чтобы игрок заранее понимал: сливать всё на рынок — ошибка.
+                L.Add(new ScreenLine("РЫНОК ПЛАТИТ ФИКС. Покупатели ТЕРРА (ночь 2+) дадут больше.", Dim));
             }
 
             if (!string.IsNullOrEmpty(browserMsg) && Time.time < browserMsgUntil)
@@ -1192,6 +1225,11 @@ public class TerminalApp
         }
 
         // Ночь 3: статус дата-центров и новости.
+        if (browserPage == 6)
+        {
+            RenderGolos(L);
+            return;
+        }
         if (browserPage == 4)
         {
             RenderDCStatus(L);
@@ -1212,6 +1250,40 @@ public class TerminalApp
         L.Add(new ScreenLine("Скорость выше 2 увеличивает след.", Dim));
         L.Add(new ScreenLine("Не попадитесь на проверке.", Dim));
         L.Add(new ScreenLine("ENTER / CTRL+C — назад", Dim));
+    }
+
+    /// <summary>Страница 6: «ГОЛОС» — журналисты против ГАНДЕКСА, вложить выручку.</summary>
+    void RenderGolos(List<ScreenLine> L)
+    {
+        L.Add(new ScreenLine("БРАУЗЕР · «ГОЛОС» — независимые журналисты", White));
+        L.Add(new ScreenLine("КР " + dir.State.credits, Dim));
+        L.Add(new ScreenLine(new string('-', s.Cols), Lines));
+
+        if (dir.State.invested)
+        {
+            L.Add(new ScreenLine("ИНВЕСТИЦИЯ ПРИНЯТА: 10000 кр.", White));
+            L.Add(new ScreenLine("", C));
+            L.Add(new ScreenLine("«выпуск выйдет, когда падёт ДЦ-7.", C));
+            L.Add(new ScreenLine("  твои деньги купят не репортаж —", C));
+            L.Add(new ScreenLine("  твоё имя в нашем досье.»", Dim));
+        }
+        else if (dir.State.credits >= NightDirector.GeoPrice)
+        {
+            L.Add(new ScreenLine("«10 000 кр. — и наш выпуск", C));
+            L.Add(new ScreenLine("  прочтёт вся страна. ГАНДЕКС", C));
+            L.Add(new ScreenLine("  впервые будет отвечать.»", C));
+            L.Add(new ScreenLine("", C));
+            L.Add(new ScreenLine("ENTER — вложить 10000 кр.", White));
+        }
+        else
+        {
+            L.Add(new ScreenLine("НАКОПЛЕНО: " + dir.State.credits + " ИЗ 10000 КР.", Dim));
+            L.Add(new ScreenLine("Геолокация ДЦ-7 продаётся ТЕРРА за 10000.", Dim));
+            L.Add(new ScreenLine("(форум, покупатель «ТЕРРА»)", Dim));
+        }
+
+        L.Add(new ScreenLine("", C));
+        L.Add(new ScreenLine("ENTER — вложить   CTRL+C — назад", Dim));
     }
 
     /// <summary>Страница 3: теневой форум ТЕРРА — лента, офферы, выбор реплики.</summary>
@@ -1540,6 +1612,13 @@ public class TerminalApp
     {
         if (browserSel < 0 || browserSel >= dir.State.filesTaken.Count) return;
         string name = dir.State.filesTaken[browserSel];
+        if (name == NightDirector.GeoFile)
+        {
+            // Геолокация — специальный заказ ТЕРРА: рынок её не понимает.
+            browserMsg = "РЫНОК ЭТО НЕ КУПИТ. ОФФЕР НА 10000 — НА ФОРУМЕ ТЕРРА.";
+            browserMsgUntil = Time.time + 3f;
+            return;
+        }
         int price = MarketPrice(name);
         if (!dir.SellStolenFile(name, price)) return;
 
@@ -1569,7 +1648,7 @@ public class TerminalApp
     List<int> BrowserPages()
     {
         var pages = new List<int> { 1, 2 };
-        if (dir.State.night >= 3 || dir.TerraUnlocked) pages.Add(3);
+        if (dir.State.night >= 3 || dir.TerraUnlocked) { pages.Add(3); pages.Add(6); }
         if (dir.State.night >= 3) { pages.Add(4); pages.Add(5); }
         return pages;
     }
@@ -1582,6 +1661,7 @@ public class TerminalApp
             case 2: return "КАК ЭТО РАБОТАЕТ";
             case 3: return "ТЕНЕВОЙ ФОРУМ · ТЕРРА";
             case 4: return "СТАТУС ДЦ";
+            case 6: return "ГОЛОС · инвестиции";
             default: return "НОВОСТИ";
         }
     }
