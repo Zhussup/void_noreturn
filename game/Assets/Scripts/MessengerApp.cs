@@ -200,7 +200,12 @@ public class MessengerApp
             L.Add(new ScreenLine("", C));
         }
 
-        L.Add(new ScreenLine("←→ каналы  ↑↓ прокрутка  B кровать", Dim));
+        // Подсказки станции — на мониторах вместо полосы внизу кадра;
+        // пока хинта нет (модалка) — локальная подсказка самого чата.
+        L.Add(new ScreenLine(
+            dir.Modal == ModalKind.None && !string.IsNullOrEmpty(dir.Hint)
+                ? dir.Hint
+                : "←→ каналы  ↑↓ прокрутка  B кровать", Dim));
         s.Set(L);
     }
 

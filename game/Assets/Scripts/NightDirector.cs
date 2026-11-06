@@ -388,9 +388,7 @@ public class NightDirector : MonoBehaviour
         ActiveStation = StationTerminal;
         if (showMenu)
         {
-            modal = ModalKind.MainMenu;
-            MenuIndex = 0;
-            if (Player != null) Player.SetCursorLocked(false); // в меню нужен курсор
+            EnterMainMenu();
         }
         else
         {
@@ -1263,12 +1261,6 @@ public class NightDirector : MonoBehaviour
         MenuIndex = (MenuIndex + delta % items.Length + items.Length) % items.Length;
     }
 
-    /// <summary>Выбор пункта мышью: подсветка следует за курсором.</summary>
-    public void MenuHover(int item)
-    {
-        MenuIndex = Mathf.Clamp(item, 0, MainMenuItems.Length - 1);
-    }
-
     /// <summary>Запустить выбранный пункт главного меню.</summary>
     public void MenuActivate(int item)
     {
@@ -1348,15 +1340,34 @@ public class NightDirector : MonoBehaviour
     /// <summary>Настройки открыты поверх главного меню (закрываться туда же).</summary>
     public bool SettingsFromMenu { get; private set; }
 
+    /// <summary>
+    /// Главное меню и настройки рисуются прямо на экране терминала —
+    /// камера ставится на терминальную станцию, курсор отпускается.
+    /// </summary>
+    void EnterMainMenu()
+    {
+        modal = ModalKind.MainMenu;
+        MenuIndex = 0;
+        if (Player != null)
+        {
+            Player.SnapToStation(StationTerminal);
+            Player.SetCursorLocked(false); // в меню смотрим глазами, без обзорной мыши
+        }
+    }
+
+    int settingsPrevStation;
+
     void OpenSettings(bool fromMenu = false)
     {
         SettingsFromMenu = fromMenu;
         SettingsRow = 0;
         modal = ModalKind.Settings;
-        if (fromMenu || Player == null) return; // в меню курсор уже свободен
+        if (fromMenu || Player == null) return; // в меню камера уже у терминала
         settingsPrevInput = Player.inputEnabled;
-        Player.inputEnabled = false;   // станции и действия ждут
-        Player.SetCursorLocked(false); // курсор нужен, чтобы выйти из окна
+        settingsPrevStation = Player.Current;   // вернёмся куда сидели
+        Player.inputEnabled = false;            // станции и действия ждут
+        Player.SnapToStation(StationTerminal);  // настройки смотрим на мониторе
+        Player.SetCursorLocked(false);
     }
 
     void CloseSettings()
@@ -1366,23 +1377,14 @@ public class NightDirector : MonoBehaviour
             // Открыто из главного меню — возвращаемся туда же,
             // а не в смену; ввод игрока в меню и так выключен.
             SettingsFromMenu = false;
-            modal = ModalKind.MainMenu;
-            MenuIndex = 0;
+            EnterMainMenu();
             return;
         }
         modal = ModalKind.None;
         if (Player == null) return;
         Player.inputEnabled = settingsPrevInput;
+        Player.SnapToStation(settingsPrevStation);
         Player.SetCursorLocked(true);
-    }
-
-    /// <summary>Кнопка «В ГЛАВНОЕ МЕНЮ» в настройках.</summary>
-    public void SettingsToMenu()
-    {
-        SettingsFromMenu = false;
-        modal = ModalKind.MainMenu;
-        MenuIndex = 0;
-        if (Player != null) Player.SetCursorLocked(false);
     }
 
     void HandleSettingsInput()
@@ -1608,18 +1610,19 @@ public class NightDirector : MonoBehaviour
             {
                 // Куда уйдёт печать — решает прицел; честно показываем это в хинте.
                 string target = TypingStation == StationMessenger
-                    ? "печать → ЧАТ   ·   [←→] каналы"
+                    ? "печать → ЧАТ  [←→] каналы"
                     : "печать → ТЕРМИНАЛ";
-                Hint = target + "   ·   B — кровать   ·   мышь — обзор";
+                Hint = target + "  B — кровать";
                 break;
-            }            case StationDesk:
-                string h = "1 — таблетка (" + State.pills + ")   ·   2 — диктофон";
-                if (recordingAvailable && !State.records[recordOfNight]) h += " (новая запись)";
-                h += "   ·   B — кровать   ·   мышь — обзор";
+            }
+            case StationDesk:
+                string h = "1 — таблетка(" + State.pills + ")  2 — диктофон";
+                if (recordingAvailable && !State.records[recordOfNight]) h += " · запись";
+                h += "  B — кровать";
                 Hint = h;
                 break;
             case StationBed:
-                Hint = "E (удерживать) — отдых   ·   мышь — обзор";
+                Hint = "E (удерживать) — отдых";
                 break;
         }
 
@@ -1627,12 +1630,12 @@ public class NightDirector : MonoBehaviour
         {
             if (Player.MonitorFocused)
                 Hint = TextInputActive
-                    ? "ESC — вернуться к комнате"
-                    : "E — вернуться к комнате";
+                    ? "ESC — отойти от экрана"
+                    : "E — отойти от экрана";
             else if (Player.CanFocusMonitor)
-                Hint += "   ·   E — приблизить";
+                Hint += "  ·  E — приблизить";
             else if (!TextInputActive)
-                Hint += "   ·   Alt — зум";
+                Hint += "  ·  Alt — зум";
         }
     }
 

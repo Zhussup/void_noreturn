@@ -134,6 +134,19 @@ public class PlayerController : MonoBehaviour
     /// <summary>Индекс текущей станции: 0 терминал, 1 мессенджер, 2 стол, 3 кровать.</summary>
     public int Current => current;
 
+    /// <summary>
+    /// Принудительно и сразу пересесть на станцию (главное меню и настройки
+    /// живут на экране терминала — камера должна смотреть на него).
+    /// </summary>
+    public void SnapToStation(int i)
+    {
+        if (stations == null || stations.Length == 0) return;
+        i = Mathf.Clamp(i, 0, stations.Length - 1);
+        ClearFocus(true);
+        current = i;
+        PoseAt(i, snap: true);
+    }
+
     CharacterController cc;
     Vector3 camLocalPos;
     int current;

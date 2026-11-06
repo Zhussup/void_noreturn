@@ -843,6 +843,12 @@ public class TerminalApp
     public void Render()
     {
         var L = new List<ScreenLine>();
+
+        // Главное меню и настройки — дизгетические: на экране терминала,
+        // вместо панелей поверх кадра (те обрезались окном Game view).
+        if (dir.Modal == ModalKind.MainMenu) { RenderMainMenu(L); s.Set(L); return; }
+        if (dir.Modal == ModalKind.Settings) { RenderSettings(L); s.Set(L); return; }
+
         string header = "GANDEX-OS · ДИУ-2   " + dir.Clock.Display +
                         "   ЗАДАЧ " + dir.TasksDone + "/" + dir.Tasks.Count +
                         "   ПЛАН " + (dir.State.planStep > 0 ? "1/1" : "0/1");
@@ -869,7 +875,54 @@ public class TerminalApp
         if (!string.IsNullOrEmpty(message) && Time.time < messageUntil)
             L.Add(new ScreenLine(message, messageColor));
 
+        // Подсказка станции — строкой на мониторе вместо полосы внизу кадра.
+        if (dir.Modal == ModalKind.None && !string.IsNullOrEmpty(dir.Hint))
+            L.Add(new ScreenLine(dir.Hint, Dim));
+
         s.Set(L);
+    }
+
+    // ------------------------------------------------------------------
+    // Главное меню и настройки — прямо в GANDEX-OS (как всё остальное UI).
+    // ------------------------------------------------------------------
+
+    void RenderMainMenu(List<ScreenLine> L)
+    {
+        L.Add(new ScreenLine("VOID: NO RETURN", White, 1.7f));
+        L.Add(new ScreenLine("ночная смена · ГАНДЕКС · ДИУ-2", Dim));
+        L.Add(new ScreenLine("", C));
+        string[] items = dir.MainMenuItems;
+        for (int i = 0; i < items.Length; i++)
+        {
+            bool sel = i == dir.MenuIndex;
+            L.Add(new ScreenLine((sel ? "▸ " : "   ") + items[i], sel ? White : C));
+        }
+        L.Add(new ScreenLine("", C));
+        L.Add(new ScreenLine("↑↓ — выбрать   E или ENTER — подтвердить", Dim));
+    }
+
+    void RenderSettings(List<ScreenLine> L)
+    {
+        L.Add(new ScreenLine("НАСТРОЙКИ", White, 1.4f));
+        L.Add(new ScreenLine(new string('-', s.Cols), Lines));
+        RowLine(L, 0, "РАЗМЕР ТЕКСТА ЭКРАНОВ", dir.UiScale, NightDirector.UiScaleSteps);
+        RowLine(L, 1, "РАЗМЕР ТЕКСТА ВВОДА", dir.TypeInScale, NightDirector.TypeInScaleSteps);
+        L.Add(new ScreenLine("", C));
+        // Живой пример: так выглядит текст, который игрок печатает.
+        L.Add(new ScreenLine("> Это Брик. Смена идёт._", C, dir.TypeInScale));
+        L.Add(new ScreenLine("", C));
+        L.Add(new ScreenLine(dir.SettingsFromMenu
+            ? "↑↓ — раздел   ←→ — значение   ESC — в главное меню"
+            : "↑↓ — раздел   ←→ — значение   ESC — вернуться в смену", Dim));
+    }
+
+    void RowLine(List<ScreenLine> L, int row, string name, float value, float[] steps)
+    {
+        bool sel = dir.SettingsRow == row;
+        int pad = Mathf.Max(2, s.Cols - name.Length - 10);
+        string t = (sel ? "▸ " : "  ") + name + new string(' ', pad)
+                 + "‹" + Mathf.RoundToInt(value * 100f) + "%›";
+        L.Add(new ScreenLine(t, sel ? White : C));
     }
 
     void Blank(List<ScreenLine> L) => L.Add(new ScreenLine("", C));

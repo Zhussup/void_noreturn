@@ -14,8 +14,7 @@ public class OverlayUI : MonoBehaviour
     Texture2D white;
 
     GUIStyle center, title, endStyle, callName, callLine, callInput, hintStyle, subtitleStyle;
-    GUIStyle interactionLabel, inputPreview, settingsTitle, settingsOption, settingsValue;
-    GUIStyle menuOption, menuValue;
+    GUIStyle interactionLabel;
     float styledScale = -1f;
     float styledTypeInScale = -1f;
     int styledHeight = -1;
@@ -88,10 +87,8 @@ public class OverlayUI : MonoBehaviour
         callInput.normal.textColor = Color.white;
 
         hintStyle = new GUIStyle(center);
-        // Хинты обязаны читаться на любом размере вью: минимум 15px и
-        // заметно светлее фона, плюс тёмная полоса-подложка при отрисовке.
-        // HUD-текст НЕ масштабируется от UiScale: настройка «РАЗМЕР ТЕКСТА»
-        // затрагивает только мониторы; оверлеи всегда в базовом размере.
+        // Мелкие подсказки внутри оверлеев (звонок); сами хинты станции
+        // теперь живут на мониторах (TerminalApp / MessengerApp).
         hintStyle.fontSize = Mathf.Max(15, Mathf.RoundToInt(Screen.height * 0.021f));
         hintStyle.normal.textColor = new Color(0.78f, 0.83f, 0.80f, 0.95f);
 
@@ -106,31 +103,8 @@ public class OverlayUI : MonoBehaviour
         interactionLabel.wordWrap = false;
         interactionLabel.normal.textColor = new Color(0.92f, 0.95f, 0.92f, 0.95f);
 
-        // Живой пример в настройках показывает размер печатаемого текста
-        // (сейчас это ответ на звонок) — тот же стиль, что и строка ответа.
-        inputPreview = new GUIStyle(callInput);
-
-        settingsTitle = new GUIStyle(center);
-        settingsTitle.fontSize = Mathf.RoundToInt(Screen.height * 0.034f * s);
-        settingsTitle.wordWrap = false;
-        settingsTitle.normal.textColor = new Color(0.88f, 0.95f, 0.90f);
-
-        settingsOption = new GUIStyle(center);
-        settingsOption.fontSize = Mathf.RoundToInt(Screen.height * 0.027f * s);
-        settingsOption.wordWrap = false;
-        settingsOption.normal.textColor = new Color(0.62f, 0.68f, 0.64f);
-
-        settingsValue = new GUIStyle(settingsOption);
-        settingsValue.normal.textColor = new Color(1f, 0.76f, 0.29f);
-
-        // Пункты главного меню — тоже вне UiScale.
-        menuOption = new GUIStyle(center);
-        menuOption.fontSize = Mathf.Max(16, Mathf.RoundToInt(Screen.height * 0.028f));
-        menuOption.wordWrap = false;
-        menuOption.normal.textColor = new Color(0.62f, 0.68f, 0.64f);
-
-        menuValue = new GUIStyle(menuOption);
-        menuValue.normal.textColor = new Color(1f, 0.76f, 0.29f);
+        // Меню и настройки рисуются на экране терминала — стилей IMGUI для них
+        // больше не нужно.
     }
 
     void OnGUI()
@@ -166,20 +140,17 @@ public class OverlayUI : MonoBehaviour
 
         if (dir.Modal == ModalKind.Intro)
             DrawIntro(w, h);
-        else if (dir.Modal == ModalKind.MainMenu)
-            DrawMainMenu(w, h);
         else if (dir.Modal == ModalKind.Rest)
             DrawRest(w, h);
         else if (dir.Modal == ModalKind.Call)
             DrawCall(w, h);
         else if (dir.Modal == ModalKind.Death || dir.Modal == ModalKind.End)
             DrawEnd(w, h);
-        else if (dir.Modal == ModalKind.Settings)
-            DrawSettings(w, h);
         else if (dir.Modal == ModalKind.Credits)
             DrawCredits(w, h);
         else if (dir.Modal == ModalKind.Epilogue)
             DrawEpilogue(w, h);
+        // Главное меню и настройки рисуются на экране терминала (TerminalApp).
 
         if (dir.CheatsOpen) DrawDevPanel(w, h);
 
@@ -191,14 +162,7 @@ public class OverlayUI : MonoBehaviour
             DrawBand(band, 0.62f);
             GUI.Label(band, dir.Subtitle, subtitleStyle);
         }
-
-        if (dir.Modal == ModalKind.None && dir.Running &&
-            !string.IsNullOrEmpty(dir.Hint))
-        {
-            var r = new Rect(0f, h - h * 0.042f, w, h * 0.038f);
-            DrawBand(r, 0.60f);
-            GUI.Label(r, dir.Hint, hintStyle);
-        }
+        // Подсказки станции — на мониторах (TerminalApp / MessengerApp).
     }
 
     void DrawCrosshair(float w, float h)
@@ -241,49 +205,6 @@ public class OverlayUI : MonoBehaviour
             GUI.Label(new Rect(0f, h * 0.52f, w, h * 0.06f), dir.IntroTitle, center);
             GUI.color = Color.white;
         }
-    }
-
-    /// <summary>
-    /// Главное меню: тёмный экран в духе игры, крупная надпись и вертикальный
-    /// список пунктов — клавиатура (↑↓, E/ENTER) и мышь (навёл — подсветилось,
-    /// кликнул — сработало). Появляется при запуске игры.
-    /// </summary>
-    void DrawMainMenu(float w, float h)
-    {
-        // Меню — оверлей: фиксированный базовый размер, вне UiScale.
-        const float s = 1f;
-
-        DrawSolid(new Rect(0, 0, w, h), new Color(0.012f, 0.02f, 0.016f, 1f));
-
-        GUI.Label(new Rect(0f, h * 0.24f, w, h * 0.11f), "VOID: NO RETURN", title);
-        GUI.Label(new Rect(0f, h * 0.38f, w, hintStyle.lineHeight),
-                  "НОЧНАЯ СМЕНА · ГАНДЕКС · ДИУ-2 · СМЕНЫ БЕЗ СЕЙВОВ", hintStyle);
-
-        string[] items = dir.MainMenuItems;
-        float itemW = Mathf.Min(380f * s, w * 0.8f);
-        float itemH = menuOption.lineHeight + 16f * s;
-        float y0 = h * 0.47f;
-
-        for (int i = 0; i < items.Length; i++)
-        {
-            var r = new Rect((w - itemW) * 0.5f, y0 + i * (itemH + 12f * s), itemW, itemH);
-            bool selected = i == dir.MenuIndex;
-            bool hover = r.Contains(Event.current.mousePosition);
-            bool lit = selected || hover;
-            if (hover && !selected) dir.MenuHover(i);
-
-            if (lit) DrawSolid(r, new Color(1f, 0.76f, 0.29f, selected ? 0.12f : 0.05f));
-            DrawBorder(r, Mathf.Max(1f, s),
-                       lit ? new Color(1f, 0.76f, 0.29f, 0.8f)
-                           : new Color(1f, 1f, 1f, 0.12f));
-            GUI.Label(r, items[i], lit ? Centered(menuValue) : Centered(menuOption));
-
-            // Курсор в меню свободен — пункт можно выбрать и кликом.
-            if (GUI.Button(r, GUIContent.none, GUIStyle.none)) dir.MenuActivate(i);
-        }
-
-        GUI.Label(new Rect(0f, h * 0.9f, w, hintStyle.lineHeight),
-                  "↑↓ — выбрать   E или ENTER — подтвердить", hintStyle);
     }
 
     void DrawRest(float w, float h)
@@ -341,111 +262,7 @@ public class OverlayUI : MonoBehaviour
         return s;
     }
 
-    void DrawSettings(float w, float h)
-    {
-        float s = dir.UiScale;
-        float pad = 28f * s;
-        float rowH = settingsOption.lineHeight + 16f * s;
-        float sectionGap = 18f * s;
-        bool fromMenu = dir.SettingsFromMenu;
-
-        float titleH = settingsTitle.lineHeight;
-        float previewH = inputPreview.lineHeight;
-        float hintH = hintStyle.lineHeight;
-        float buttonsH = fromMenu ? rowH : 0f;
-
-        float pw = Mathf.Clamp(620f * s, 380f * s, w * 0.9f);
-        float ph = Mathf.Min(pad * 2f + titleH + sectionGap + rowH + sectionGap
-                           + rowH + sectionGap + previewH + sectionGap + buttonsH
-                           + hintH, h * 0.85f);
-        var panel = new Rect((w - pw) * 0.5f, (h - ph) * 0.5f, pw, ph);
-
-        DrawSolid(new Rect(0, 0, w, h), new Color(0, 0, 0, 0.9f));
-        DrawSolid(panel, new Color(0.045f, 0.06f, 0.052f, 0.96f));
-        DrawBorder(panel, Mathf.Max(1f, 1.5f * s), new Color(0.28f, 0.38f, 0.32f, 0.85f));
-
-        float x = panel.x + pad;
-        float iw = pw - pad * 2f;
-        float y = panel.y + pad;
-
-        GUI.Label(new Rect(x, y, iw, titleH), "НАСТРОЙКИ", settingsTitle);
-        y += titleH + sectionGap;
-
-        y = DrawScaleRow(x, y, iw, rowH, s, "РАЗМЕР ТЕКСТА ЭКРАНОВ",
-                         NightDirector.UiScaleSteps, dir.UiScaleIndex, 0) + sectionGap;
-        y = DrawScaleRow(x, y, iw, rowH, s, "РАЗМЕР ТЕКСТА ВВОДА",
-                         NightDirector.TypeInScaleSteps, dir.TypeInScaleIndex, 1) + sectionGap;
-
-        // Живой пример: видно, как меняется именно печатаемый текст
-        // (сейчас из печатаемого — только ответ на звонок).
-        GUI.Label(new Rect(x, y, iw, previewH), "> Это Брик. Смена идет._", inputPreview);
-        y += previewH + sectionGap;
-
-        if (fromMenu)
-        {
-            var btn = new Rect(x, y, iw, rowH);
-            bool hover = btn.Contains(Event.current.mousePosition);
-            if (!hover) DrawSolid(btn, new Color(1f, 1f, 1f, 0.03f));
-            DrawBorder(btn, Mathf.Max(1f, s), new Color(1f, 1f, 1f, hover ? 0.35f : 0.14f));
-            GUI.Label(btn, "В ГЛАВНОЕ МЕНЮ", Centered(settingsOption));
-            if (GUI.Button(btn, GUIContent.none, GUIStyle.none)) dir.SettingsToMenu();
-            y += rowH + sectionGap;
-        }
-
-        GUI.Label(new Rect(x, y, iw, hintH),
-                  fromMenu ? "↑↓ — раздел   ← → — значение   ESC — назад в меню"
-                           : "↑↓ — раздел   ← → — значение   ESC — вернуться в смену", hintStyle);
-    }
-
-    GUIStyle Centered(GUIStyle src)
-    {
-        var c = new GUIStyle(src);
-        c.alignment = TextAnchor.MiddleCenter;
-        return c;
-    }
-
-    /// <summary>Одна строка настроек: название слева, ‹ значение › справа. Возвращает Y после неё.</summary>
-    float DrawScaleRow(float x, float y, float iw, float rowH, float s,
-                       string name, float[] steps, int selected, int row)
-    {
-        bool rowSelected = dir.SettingsRow == row;
-        var rowRect = new Rect(x - 10f * s, y - 5f * s, iw + 20f * s, rowH + 10f * s);
-        if (rowSelected)
-        {
-            DrawSolid(rowRect, new Color(1f, 0.76f, 0.29f, 0.08f));
-            DrawBorder(rowRect, Mathf.Max(1f, s), new Color(1f, 0.76f, 0.29f, 0.55f));
-        }
-
-        GUI.Label(new Rect(x, y, iw * 0.55f, rowH), name,
-                  rowSelected ? settingsValue : settingsOption);
-
-        float arrowW = rowH;   // квадрат под стрелку
-        float valueW = 96f * s;
-        float gap = 6f * s;
-        float bx = x + iw - arrowW * 2f - valueW - gap * 2f;
-
-        GUIStyle val = rowSelected ? settingsValue : settingsOption;
-        var left = new Rect(bx, y, arrowW, rowH);
-        var value = new Rect(bx + arrowW + gap, y, valueW, rowH);
-        var right = new Rect(bx + arrowW + valueW + gap * 2f, y, arrowW, rowH);
-
-        GUI.Label(left, "‹", val);
-        GUI.Label(value, Mathf.RoundToInt(steps[selected] * 100f) + "%", Centered(val));
-        GUI.Label(right, "›", val);
-
-        // Курсор в меню свободен: стрелки кликабельны.
-        if (GUI.Button(left, GUIContent.none, GUIStyle.none))
-        {
-            dir.SelectSettingsRow(row);
-            dir.AdjustSetting(-1);
-        }
-        if (GUI.Button(right, GUIContent.none, GUIStyle.none))
-        {
-            dir.SelectSettingsRow(row);
-            dir.AdjustSetting(1);
-        }
-        return y + rowH;
-    }
+    // Настройки и главное меню рисуются на экране терминала (TerminalApp).
 
     void DrawEnd(float w, float h)
     {
@@ -542,7 +359,7 @@ public class OverlayUI : MonoBehaviour
         DrawBorder(panel, Mathf.Max(1f, s), new Color(1f, 0.76f, 0.29f, 0.55f));
 
         GUI.Label(new Rect(panel.x + pad, panel.y + pad * 0.6f, panel.width - pad * 2, lineH),
-                  "ДЕВ-МЕНЮ · F9", settingsValue);
+                  "ДЕВ-МЕНЮ · F9", hintStyle);
         for (int i = 0; i < dir.CheatLines.Length; i++)
             GUI.Label(new Rect(panel.x + pad, panel.y + pad * 0.6f + (i + 1) * lineH,
                                panel.width - pad * 2, lineH),
