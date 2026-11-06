@@ -157,15 +157,18 @@ public class NightDirector : MonoBehaviour
                 ShowSubtitle("ЧИТ: таблетки +3, тревога 0.", 2.5f);
                 break;
 
-            case 7: // +30 игровых минут (1 игровая минута = 1.5 реальной секунды)
-                Clock.Advance(45f);
+            case 7: // +30 игровых минут
+                Clock.Advance(30f);
                 TickEvents();
                 ShowSubtitle("ЧИТ: +30 игровых минут.", 2.5f);
                 break;
 
             case 8: // прыжок на 06:59 — следующая минута решает финал
             {
-                float left = (419 - Clock.WholeMinutes) * 1.5f;
+                // Advance принимает ИГРОВЫЕ минуты: раньше сюда уезжали
+                // реаль­ные секунды (×1.5) и прыжок упирался в кламп 420,
+                // закрывая смену прямо под открытой чит-панелью.
+                float left = 419 - Clock.WholeMinutes;
                 if (left > 0f) Clock.Advance(left);
                 TickEvents();
                 break;
@@ -1089,6 +1092,12 @@ public class NightDirector : MonoBehaviour
 
     void Update()
     {
+        // [отладка] маячок раз в секунду — найти по Console кадр, после которого
+        // скрипт перестаёт вызываться при зависании. Убрать после ловли.
+        if (Time.frameCount % 60 == 0)
+            Debug.Log("[VNR] кадр " + Time.frameCount + " · " + Clock.Display +
+                      " modal=" + modal + " running=" + Running);
+
         if (Player != null)
         {
             ActiveStation = Player.Current;
@@ -1408,7 +1417,12 @@ public class NightDirector : MonoBehaviour
     {
         int m = Clock.WholeMinutes;
         if (m == lastMinute) return;
+        // [отладка] сколько событий сработало за минуту и что решено на 07:00.
+        int fired = 0;
         lastMinute = m;
+        if (Clock.Finished)
+            Debug.Log("[VNR] минута " + m + ": 07:00, ночь " + State.night +
+                      (exploded ? ", взрыв был" : ", взрыва не было"));
 
         for (int i = 0; i < events.Count; i++)
         {
@@ -1416,9 +1430,12 @@ public class NightDirector : MonoBehaviour
             if (!e.done && e.minute <= m)
             {
                 e.done = true;
+                fired++;
                 if (e.action != null) e.action();
             }
         }
+        if (fired > 0)
+            Debug.Log("[VNR] минута " + m + ": сработало событий " + fired);
 
         if (Clock.Finished)
         {
@@ -2265,6 +2282,7 @@ public class NightDirector : MonoBehaviour
 
     void EndNight()
     {
+        Debug.Log("[VNR] EndNight: отчёт 07:00"); // [отладка]
         if (modal == ModalKind.End) return;
         if (ringSource != null) ringSource.Stop();
         phone = PhoneState.Idle;
