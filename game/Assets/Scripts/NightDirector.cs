@@ -42,17 +42,11 @@ public class NightDirector : MonoBehaviour
     public float UiScale =>
         UiScaleSteps[Mathf.Clamp(UiScaleIndex, 0, UiScaleSteps.Length - 1)];
 
-    /// <summary>Размер того, что игрок печатает в ответе на звонок.</summary>
-    public static readonly float[] TypeInScaleSteps = { 0.8f, 1.0f, 1.2f, 1.4f, 1.6f };
-    const string TypeInScalePref = "vnr.typeInScaleIndex";
-
-    /// <summary>Множитель к базовому кеглю печатаемого текста; 1.0 — как было.</summary>
-    public int TypeInScaleIndex { get; private set; } = 1;
-    public float TypeInScale =>
-        TypeInScaleSteps[Mathf.Clamp(TypeInScaleIndex, 0, TypeInScaleSteps.Length - 1)];
-
-    /// <summary>Выбранная строка настроек: 0 — интерфейс, 1 — текст ввода.</summary>
-    public int SettingsRow { get; private set; }
+    /// <summary>
+    /// Множитель кегля печатаемого текста (строка ответа на звонок и т. п.).
+    /// Отдельная настройка «РАЗМЕР ТЕКСТА ВВОДА» убрана — всегда базовый.
+    /// </summary>
+    public const float TypeInScale = 1f;
 
     // ------------------------------------------------------------ дев-читы (F9)
 
@@ -362,8 +356,6 @@ public class NightDirector : MonoBehaviour
 
         UiScaleIndex = Mathf.Clamp(PlayerPrefs.GetInt(UiScalePref, UiScaleIndex),
                                    0, UiScaleSteps.Length - 1);
-        TypeInScaleIndex = Mathf.Clamp(PlayerPrefs.GetInt(TypeInScalePref, TypeInScaleIndex),
-                                       0, TypeInScaleSteps.Length - 1);
 
         if (Player != null)
         {
@@ -1329,23 +1321,6 @@ public class NightDirector : MonoBehaviour
         ApplyTextScale(); // текст на мониторах перестраивается сразу
     }
 
-    /// <summary>Выбрать шаг размера печатаемого текста (карточка в настройках).</summary>
-    public void SetTypeInScale(int index)
-    {
-        int next = Mathf.Clamp(index, 0, TypeInScaleSteps.Length - 1);
-        if (next == TypeInScaleIndex) return;
-
-        TypeInScaleIndex = next;
-        PlayerPrefs.SetInt(TypeInScalePref, TypeInScaleIndex);
-        PlayerPrefs.Save();
-    }
-
-    /// <summary>Строка настроек, которую сейчас крутят стрелками.</summary>
-    public void SelectSettingsRow(int row)
-    {
-        SettingsRow = Mathf.Clamp(row, 0, 1);
-    }
-
     /// <summary>Настройки открыты поверх главного меню (закрываться туда же).</summary>
     public bool SettingsFromMenu { get; private set; }
 
@@ -1369,7 +1344,6 @@ public class NightDirector : MonoBehaviour
     void OpenSettings(bool fromMenu = false)
     {
         SettingsFromMenu = fromMenu;
-        SettingsRow = 0;
         modal = ModalKind.Settings;
         if (fromMenu || Player == null) return; // в меню камера уже у терминала
         settingsPrevInput = Player.inputEnabled;
@@ -1398,19 +1372,15 @@ public class NightDirector : MonoBehaviour
 
     void HandleSettingsInput()
     {
-        if (Input.GetKeyDown(KeyCode.UpArrow)) SelectSettingsRow(SettingsRow - 1);
-        if (Input.GetKeyDown(KeyCode.DownArrow)) SelectSettingsRow(SettingsRow + 1);
+        // Одна настройка — размер текста экранов; ←→ крутят её по кругу.
         if (Input.GetKeyDown(KeyCode.LeftArrow)) AdjustSetting(-1);
         if (Input.GetKeyDown(KeyCode.RightArrow)) AdjustSetting(1);
     }
 
     public void AdjustSetting(int delta)
     {
-        // Стрелки и мышь крутят по кругу — как в любом нормальном меню.
-        if (SettingsRow == 0)
-            SetUiScale((UiScaleIndex + delta % UiScaleSteps.Length + UiScaleSteps.Length) % UiScaleSteps.Length);
-        else
-            SetTypeInScale((TypeInScaleIndex + delta % TypeInScaleSteps.Length + TypeInScaleSteps.Length) % TypeInScaleSteps.Length);
+        // Стрелки крутят по кругу — как в любом нормальном меню.
+        SetUiScale((UiScaleIndex + delta % UiScaleSteps.Length + UiScaleSteps.Length) % UiScaleSteps.Length);
     }
 
     /// <summary>Отсчёт до звонка шефа после успешного входа в терминал.</summary>

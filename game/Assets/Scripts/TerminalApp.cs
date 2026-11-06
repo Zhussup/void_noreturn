@@ -850,8 +850,7 @@ public class TerminalApp
         if (dir.Modal == ModalKind.Settings) { RenderSettings(L); s.Set(L); return; }
 
         string header = "GANDEX-OS · ДИУ-2   " + dir.Clock.Display +
-                        "   ЗАДАЧ " + dir.TasksDone + "/" + dir.Tasks.Count +
-                        "   ПЛАН " + (dir.State.planStep > 0 ? "1/1" : "0/1");
+                        "   ЗАДАЧ " + dir.TasksDone + "/" + dir.Tasks.Count;
         L.Add(new ScreenLine(header, dir.State.anxiety > 55f ? Warn : Dim));
         L.Add(new ScreenLine(new string('-', s.Cols), Lines));
 
@@ -905,24 +904,12 @@ public class TerminalApp
     {
         L.Add(new ScreenLine("НАСТРОЙКИ", White, 1.4f));
         L.Add(new ScreenLine(new string('-', s.Cols), Lines));
-        RowLine(L, 0, "РАЗМЕР ТЕКСТА ЭКРАНОВ", dir.UiScale, NightDirector.UiScaleSteps);
-        RowLine(L, 1, "РАЗМЕР ТЕКСТА ВВОДА", dir.TypeInScale, NightDirector.TypeInScaleSteps);
+        L.Add(new ScreenLine(
+            "▸ РАЗМЕР ТЕКСТА ЭКРАНОВ   ‹" +
+            Mathf.RoundToInt(dir.UiScale * 100f) + "%›", White));
         L.Add(new ScreenLine("", C));
-        // Живой пример: так выглядит текст, который игрок печатает.
-        L.Add(new ScreenLine("> Это Брик. Смена идёт._", C, dir.TypeInScale));
-        L.Add(new ScreenLine("", C));
-        L.Add(new ScreenLine(dir.SettingsFromMenu
-            ? "↑↓ — раздел   ←→ — значение   ESC — в главное меню"
-            : "↑↓ — раздел   ←→ — значение   ESC — вернуться в смену", Dim));
-    }
-
-    void RowLine(List<ScreenLine> L, int row, string name, float value, float[] steps)
-    {
-        bool sel = dir.SettingsRow == row;
-        int pad = Mathf.Max(2, s.Cols - name.Length - 10);
-        string t = (sel ? "▸ " : "  ") + name + new string(' ', pad)
-                 + "‹" + Mathf.RoundToInt(value * 100f) + "%›";
-        L.Add(new ScreenLine(t, sel ? White : C));
+        L.Add(new ScreenLine("←→ — размер   ESC — " +
+            (dir.SettingsFromMenu ? "в главное меню" : "вернуться в смену"), Dim));
     }
 
     void Blank(List<ScreenLine> L) => L.Add(new ScreenLine("", C));
