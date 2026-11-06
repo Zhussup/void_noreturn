@@ -8,7 +8,8 @@ using UnityEngine;
 public class OverlayUI : MonoBehaviour
 {
     NightDirector dir;
-    Font font;
+    Font font;        // шрифт мониторов (OS-шрифт) — в IMGUI непригоден
+    Font imguiFont;   // встроенный шрифт для оверлеев IMGUI
 
     Texture2D vignette;
     Texture2D white;
@@ -46,6 +47,20 @@ public class OverlayUI : MonoBehaviour
 
     void EnsureStyles()
     {
+        if (imguiFont == null)
+        {
+            // Шрифт из CreateDynamicFontFromOSFont рисуется на мониторах-мешах,
+            // но IMGUI не может загрузить его лицо — каждый GUI.Label даёт
+            // «Unable to load font face» и текст невидим (пустой экран отчёта
+            // выглядел как зависание). Оверлеям — встроенный шрифт Unity.
+            try { imguiFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); }
+            catch { imguiFont = null; }
+            if (imguiFont == null)
+                try { imguiFont = Resources.GetBuiltinResource<Font>("Arial.ttf"); }
+                catch { imguiFont = null; }
+            if (imguiFont == null) imguiFont = GUI.skin.label.font;
+        }
+
         float s = dir != null ? dir.UiScale : 1f;
         float ti = dir != null ? dir.TypeInScale : 1f;
         int sh = Screen.height;
@@ -56,7 +71,7 @@ public class OverlayUI : MonoBehaviour
         styledHeight = sh; // после смены размера Game view шрифты пересобираются
 
         center = new GUIStyle(GUI.skin.label);
-        center.font = font;
+        center.font = imguiFont;
         center.fontSize = Mathf.RoundToInt(Screen.height * 0.026f * s);
         center.alignment = TextAnchor.MiddleCenter;
         center.wordWrap = true;
