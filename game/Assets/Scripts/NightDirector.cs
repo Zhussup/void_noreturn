@@ -1106,10 +1106,19 @@ public class NightDirector : MonoBehaviour
             ShowSubtitle("Дев-меню открыто.", 1.5f);
             return;
         }
-        if (CheatsOpen && (Running || modal == ModalKind.Intro))
+        if (CheatsOpen)
         {
-            HandleCheatInput();
-            if (CheatsOpen) return; // мир живёт, клавиши — только в панель
+            if (!Running && modal != ModalKind.Intro)
+            {
+                // Чит (например, прыжок на 06:59) уже привёл к финалу/смерти:
+                // закрываем панель сама, иначе она застывает поверх финала.
+                CheatsOpen = false;
+            }
+            else
+            {
+                HandleCheatInput();
+                if (CheatsOpen) return; // мир живёт, клавиши — только в панель
+            }
         }
 
         if (modal == ModalKind.MainMenu)
